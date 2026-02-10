@@ -1,0 +1,11 @@
+services:
+  backend:
+    build: .
+    container_name: observability_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
+    env_file:
+      - .env
+    restart: unless-stopped
