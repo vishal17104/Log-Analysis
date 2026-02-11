@@ -1,0 +1,22 @@
+{
+  "timestamp": {
+    "type": "datetime",
+    "required": true,
+    "format": "ISO 8601"
+  },
+  "service": {
+    "type": "string",
+    "required": true,
+    "max_length": 50
+  },
+  "level": {
+    "type": "string",
+    "required": true,
+    "allowed_values": ["INFO", "WARNING", "ERROR"]
+  },
+  "message": {
+    "type": "string",
+    "required": true,
+    "max_length": 500
+  }
+}
