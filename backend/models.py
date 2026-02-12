@@ -17,6 +17,12 @@ class Log(Base):
     message = Column(Text)
     raw_data = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    host = Column(String, nullable=True, index=True)
+    pid = Column(Integer, nullable=True, index=True)
+    ip_address = Column(String, nullable=True, index=True)
+    status_code = Column(Integer, nullable=True, index=True)
+
+
 
 class Incident(Base):
 
