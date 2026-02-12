@@ -1,7 +1,12 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from dotenv import load_dotenv
+import os
 
-DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/logdb"
+load_dotenv()
+
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@localhost:5432/logdb")
 
 engine = create_engine(
     DATABASE_URL,
