@@ -46,4 +46,3 @@ class LogStats(BaseModel):
     time_range: Dict[str, datetime]
     timeline: List[Dict[str, Any]]
 
-

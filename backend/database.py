@@ -10,7 +10,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin123@localhost:
 
 engine = create_engine(
     DATABASE_URL,
-    echo=True
+    echo=False
 )
 
 SessionLocal = sessionmaker(
