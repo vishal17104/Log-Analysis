@@ -36,4 +36,14 @@ class LogResponse(LogCreate):
         from_attributes = True
 
 
+class LogStats(BaseModel):
+    total_logs: int
+    error_count: int
+    warning_count: int
+    info_count: int
+    debug_count:int
+    by_service: Dict[str, int]
+    time_range: Dict[str, datetime]
+    timeline: List[Dict[str, Any]]
+
 
