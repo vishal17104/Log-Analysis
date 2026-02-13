@@ -39,7 +39,10 @@ def get_logs(
     if end_time:
         query = query.filter(models.Log.timestamp <= end_time)
 
-    return db.query(models.Log).order_by(models.Log.timestamp.desc()).offset(skip).limit(limit).all()
+    return query.order_by(
+    models.Log.timestamp.desc()
+).offset(skip).limit(limit).all()
+
 
 def get_log(db: Session, log_id: int):
     """Get a log by ID"""
@@ -107,7 +110,7 @@ def create_logs_bulk(db: Session, logs: List[schemas.LogCreate]):
         db_logs.append(db_log)
 
     db.commit()
-    for log in db_log:
+    for log in db_logs:
         db.refresh(log)
     return db_logs
 
