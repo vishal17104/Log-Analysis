@@ -34,6 +34,9 @@ class Incident(Base):
     error_count = Column(Integer, default=0)
     detected_at = Column(DateTime, default=datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)
+    window_start = Column(DateTime, nullable=True)
+    window_end = Column(DateTime, nullable=True)
+
 
 
 class Runbook(Base):

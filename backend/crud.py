@@ -115,5 +115,21 @@ def create_logs_bulk(db: Session, logs: List[schemas.LogCreate]):
     return db_logs
 
 
+def create_incident(db: Session, incident: schemas.IncidentCreate):
+    """Create an incident"""
+    db_incident = models.Incident(
+        title=incident.title,
+        severity=incident.severity,
+        error_count=incident.error_count,
+        window_start=incident.window_start,
+        window_end=incident.window_end,
+        status="open"
+    )
+    db.add(db_incident)
+    db.commit()
+    db.refresh(db_incident)
+    return db_incident
 
- 
+def get_incidents(db: Session, skip: int = 0, limit: int = 50):
+    """Get all incidents"""
+    return db.query(models.Incident).filter(models.Incident.status == "open").order_by(models.Incident.detected_at.desc()).offset(skip).limit(limit).all()
