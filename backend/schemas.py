@@ -46,3 +46,21 @@ class LogStats(BaseModel):
     time_range: Dict[str, datetime]
     timeline: List[Dict[str, Any]]
 
+class IncidentBase(BaseModel):
+    title: str
+    severity: str
+    error_count: int
+    window_start: datetime
+    window_end: datetime
+
+class IncidentCreate(IncidentBase):
+    pass
+
+class IncidentResponse(IncidentBase):
+    id: int
+    status: str
+    detected_at: datetime
+    resolved_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
