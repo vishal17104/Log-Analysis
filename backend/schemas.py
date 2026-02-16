@@ -64,3 +64,17 @@ class IncidentResponse(IncidentBase):
 
     class Config:
         from_attributes = True
+
+
+class IncidentStatusUpdate(IncidentResponse):
+    status:str # open, investigating, resolved
+
+class IncidentDetailResponse(IncidentResponse):
+    logs: List[dict] = [] # Will be populated with related logs
+
+class IncidentSummary(BaseModel):
+    total_incidents: int
+    open_incidents: int
+    resolved_incidents: int
+    by_severity: Dict[str, int]
+    avg_resolution_time: Optional[float] = None    
