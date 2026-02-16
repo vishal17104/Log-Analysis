@@ -130,6 +130,121 @@ def create_incident(db: Session, incident: schemas.IncidentCreate):
     db.refresh(db_incident)
     return db_incident
 
-def get_incidents(db: Session, skip: int = 0, limit: int = 50):
-    """Get all incidents"""
-    return db.query(models.Incident).filter(models.Incident.status == "open").order_by(models.Incident.detected_at.desc()).offset(skip).limit(limit).all()
+def get_incidents(
+    db: Session, 
+    skip: int = 0, 
+    limit: int = 50,
+    status: Optional[str] = None,
+    severity: Optional[str] = None
+):
+    """Get incidents with filters"""
+    query = db.query(models.Incident)
+    
+    if status:
+        query = query.filter(models.Incident.status == status)
+    if severity:
+        query = query.filter(models.Incident.severity == severity)
+    
+    return query.order_by(
+        models.Incident.detected_at.desc()
+    ).offset(skip).limit(limit).all()
+
+def get_incident(db: Session, incident_id: int):
+    """Get single incident by ID"""
+    return db.query(models.Incident).filter(
+        models.Incident.id == incident_id
+    ).first()
+
+def get_detailed_incidents(db: Session, incident_id: int):
+    """Get detailed incident info including logs"""
+    incident = get_incident(db, incident_id)
+    if not incident:
+        None
+
+    # Get logs from the incident's time window
+    if incident.window_start and incident.window_end:
+        logs = db.query(models.Log).filter(
+            models.Log.timestamp >= incident.window_start,
+            models.Log.timestamp <= incident.window_end,
+            models.Log.level == 'ERROR'
+        ).order_by(models.Log.timestamp).all()
+    else:
+        logs = []
+
+    # Convert incident to dict and add logs
+    incident_dict = {
+        "id": incident.id,
+        "title": incident.title,
+        "severity": incident.severity,
+        "status": incident.status,
+        "error_count": incident.error_count,
+        "detected_at": incident.detected_at,
+        "resolved_at": incident.resolved_at,
+        "window_start": incident.window_start,
+        "window_end": incident.window_end,
+        "logs": [{"id": log.id, "message": log.message, "timestamp": log.timestamp} 
+                for log in logs]
+    }
+
+    return incident_dict
+
+def update_incident_status(db: Session, incident_id: int, status: str):
+    """Update incident status"""
+    incident = get_incident(db, incident_id)
+    if incident:
+        incident.status = status
+        if status == "resolved":
+            incident.resolved_at = datetime.utcnow()
+        db.commit()
+        db.refresh(incident)
+    return incident
+
+def get_incident_summary(db: Session, days: int = 7):
+    """Get incident statistics"""
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    
+    # Total incidents
+    total = db.query(models.Incident).filter(
+        models.Incident.detected_at >= cutoff
+    ).count()
+
+    # Open incidents
+    open_count = db.query(models.Incident).filter(
+        models.Incident.detected_at >= cutoff,
+        models.Incident.status == "open"
+    ).count()
+
+    # By severity
+    severity_counts = db.query(
+        models.Incident.severity,
+        func.count().label('count')
+    ).filter(
+        models.Incident.detected_at >= cutoff
+    ).group_by(
+        models.Incident.severity
+    ).all()
+
+    # Average resolution time for resolved incidents
+    resolved = db.query(models.Incident).filter(
+        models.Incident.detected_at >= cutoff,
+        models.Incident.status == "resolved",
+        models.Incident.resolved_at.isnot(None)
+    ).all()
+
+    if resolved:
+        total_time = sum(
+            (inc.resolved_at - inc.detected_at).total_seconds() / 60
+            for inc in resolved
+        )
+
+        avg_time = total_time / len(resolved)
+    else:
+        avg_time = None
+
+    return {
+        "total_incidents": total,
+        "open_incidents": open_count,
+        "resolved_incidents": total - open_count,
+        "by_severity": {s: c for s, c in severity_counts},
+        "avg_resolution_time": avg_time
+    }
