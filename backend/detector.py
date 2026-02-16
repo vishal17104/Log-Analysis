@@ -4,13 +4,20 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import time
 import logging
-from backend import models, crud, schemas
-from backend.database import SessionLocal
 
+from backend import models
+from backend.database import SessionLocal
+from backend.services.incident_service import (
+    create_incident_from_spike,
+    get_open_incident_for_service
+)
+
+# ---------------- CONFIG ---------------- #
 
 ERROR_THRESHOLD = 10
-TIME_WINDOW = 1
-CONSECUTIVE_TIME = 2
+TIME_WINDOW = 1          # minutes
+CONSECUTIVE_TIME = 2     # minutes
+
 SEVERITY_THRESHOLDS = {
     "CRITICAL": 50,
     "HIGH": 20,
@@ -18,18 +25,33 @@ SEVERITY_THRESHOLDS = {
     "LOW": 5
 }
 
+# ---------------- LOGGING ---------------- #
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def check_error_rate(db: Session) -> List[Dict[str, Any]]:
-    """Check error rates per service for last minute"""
+# ---------------- DETECTOR LOGIC ---------------- #
 
+def check_error_rate(db: Session) -> List[Dict[str, Any]]:
+    """
+    Check error rates per service for last TIME_WINDOW minutes
+    """
     cutoff = datetime.utcnow() - timedelta(minutes=TIME_WINDOW)
 
-    error_count = db.query(models.Log.service, func.count().label('error_count')).filter(models.Log.level == 'ERROR', models.Log.timestamp >= cutoff).group_by(models.Log.service).all()
+    error_count = (
+        db.query(
+            models.Log.service,
+            func.count().label("error_count")
+        )
+        .filter(
+            models.Log.level == "ERROR",
+            models.Log.timestamp >= cutoff
+        )
+        .group_by(models.Log.service)
+        .all()
+    )
 
-    result = []
+    results = []
 
     for service, count in error_count:
         if count >= ERROR_THRESHOLD:
@@ -38,76 +60,94 @@ def check_error_rate(db: Session) -> List[Dict[str, Any]]:
                 if count >= threshold:
                     severity = level
 
-            result.append({
+            spike = {
                 "service": service,
                 "error_count": count,
                 "severity": severity,
                 "window_start": cutoff,
                 "window_end": datetime.utcnow()
-            })
-            logger.info(f"High errors in {service}: {count} errors/min ({severity})")
+            }
 
-    return result
+            results.append(spike)
 
-def create_incident(db: Session, spike_data: Dict[str, Any]) -> models.Incident:
-    """Create an incident based on spike data"""
+            logger.info(
+                f"High error rate detected | service={service} "
+                f"errors={count}/min severity={severity}"
+            )
 
-    incident = schemas.IncidentCreate(
-        title=f"Error spike in {spike_data['service']} service",
-        severity=spike_data['severity'],
-        error_count=spike_data['error_count'],
-        window_start=spike_data['window_start'],
-        window_end=spike_data['window_end']
-    )
+    return results
 
-    db_incident = crud.create_incident(db, incident)
-    return db_incident
 
-def check_consecutive_spikes(db: Session, service:str) -> bool:
-    """Check if service has had high errors for consecutive minutes"""
-
+def check_consecutive_spikes(db: Session, service: str) -> bool:
+    """
+    Check if a service has exceeded ERROR_THRESHOLD
+    for CONSECUTIVE_TIME consecutive minutes
+    """
     cutoff = datetime.utcnow() - timedelta(minutes=CONSECUTIVE_TIME)
 
-    minutes_count = db.query(func.data_trunc('minute', models.Log.timestamp).label('minute'), func.count().label('count')).filter(models.Log.service == service, models.Log.level == 'ERROR', models.Log.timestamp >= cutoff).group_by('minute').all()
+    minutes_data = (
+        db.query(
+            func.date_trunc("minute", models.Log.timestamp).label("minute"),
+            func.count().label("count")
+        )
+        .filter(
+            models.Log.service == service,
+            models.Log.level == "ERROR",
+            models.Log.timestamp >= cutoff
+        )
+        .group_by("minute")
+        .order_by("minute")
+        .all()
+    )
 
-    # Check if we have data for all recent minutes
-    expected_minutes = CONSECUTIVE_TIME
-    if len(minutes_count) < expected_minutes:
+    if len(minutes_data) < CONSECUTIVE_TIME:
         return False
 
-    # Check if all minutes exceeded threshold
-    for minute, count in minutes_count[-expected_minutes:]:
+    for _, count in minutes_data[-CONSECUTIVE_TIME:]:
         if count < ERROR_THRESHOLD:
             return False
-    
+
     return True
 
-def detect_and_create_incidents(db: Session):
-    """Detect and create incidents"""
-    logger.info("Running incident detection...")
 
-    #check current error rates
+def detect_and_create_incidents(db: Session):
+    """
+    Main detection flow:
+    Log → Detect → Check sustained spike → Create incident
+    """
+    logger.info("Running incident detection cycle...")
+
     spikes = check_error_rate(db)
 
     for spike in spikes:
-        service = spike['service']
+        service = spike["service"]
 
-        #check if this is a sustained issue
-        if check_consecutive_spikes(db, service):
-            # Check if incident already exists for this service
-            existing_incident = db.query(models.Incident).filter(models.Incident.title.contains(service), models.Incident.status == 'open').first()
+        # Check sustained issue
+        if not check_consecutive_spikes(db, service):
+            continue
 
-            if not existing_incident:
-                incident = create_incident(db, spike)
-                # TODO: Trigger AI Analysis
+        # Check for existing open incident
+        existing_incident = get_open_incident_for_service(db, service)
 
-            else:
-                logger.info(f"Incident already exists for {service}")
-    logger.info("Detection complete")
+        if existing_incident:
+            logger.info(f"Open incident already exists for service={service}")
+            continue
 
-def detector_loop(interval_seconds = 60):
-    """Run detector continuously (for background process)"""
-    logger.info(f"Starting detector loop (interval: {interval_seconds}s)")
+        # Create new incident
+        create_incident_from_spike(db, spike)
+
+        # TODO (Day 7+): Trigger AI analysis here
+
+    logger.info("Incident detection cycle completed")
+
+
+# ---------------- BACKGROUND LOOP ---------------- #
+
+def detector_loop(interval_seconds: int = 60):
+    """
+    Continuous detector loop (background process)
+    """
+    logger.info(f"Starting detector loop (interval={interval_seconds}s)")
 
     while True:
         try:
@@ -116,8 +156,10 @@ def detector_loop(interval_seconds = 60):
             db.close()
         except Exception as e:
             logger.error(f"Detector error: {e}")
-
         time.sleep(interval_seconds)
+
+
+# ---------------- MANUAL RUN ---------------- #
 
 if __name__ == "__main__":
     db = SessionLocal()
