@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from backend.routers import logs
+from backend.routers import logs, incidents
 
 app = FastAPI(
     title="Log Analysis API",
@@ -7,8 +7,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-@app.get("/")
-def root():
-    return {"status": "Log Analysis API running"}
-
 app.include_router(logs.router)
+app.include_router(incidents.router)
+
+

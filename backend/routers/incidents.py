@@ -81,7 +81,7 @@ def trigger_detection(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Detection failed: {str(e)}")
     
-@router.get("/stats/summary", response_model=schemas.IncidentStats)  
+@router.get("/stats/summary", response_model=schemas.IncidentSummary)  
 def get_incident_stats(
     days: int = Query(7, ge=1, le=30),
     db: Session = Depends(get_db)
