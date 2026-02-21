@@ -1,157 +1,99 @@
+from google import genai
+from google.genai import types # Required for JSON mode configuration
 import os
-import google.generativeai as genai
-from dotenv import load_dotenv
 import json
+import logging
 from typing import Dict, Any, List
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
-API_KEY = os.getenv("GEMINI_API_KEY")
-if not API_KEY:
-    raise ValueError("GEMINI_API_KEY is not set")
+# Use gemini-1.5-flash for faster, cheaper processing for logs
+MODEL_NAME = "models/gemini-2.5-flash"
 
-genai.configure(api_key=API_KEY)
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-MODEL_NAME = 'gemini-2.5-flash'
-
-def analyze_incident(logs: List[Dict[str, Any]], service: str = None) -> Dict[str, Any]:
-    """Analyze incident logs using Gemini"""
-
+def analyze_incident(
+    logs: List[Dict[str, Any]],
+    service: str | None = None
+) -> str:
+    """
+    Analyze incident logs using Gemini.
+    Returns JSON as STRING (DB-safe).
+    """
     try:
-        model = genai.GenerativeModel(MODEL_NAME)
-
-        #preparing log samples
-        log_samples = logs[:20]
+        # 1. Format logs for the prompt
         log_text = "\n".join([
-            f"[{log['timestamp']}] {log['service']} : {log}['message']"
-            for log in log_samples
+            f"[{log.get('timestamp')}] {log.get('service')} : {log.get('message')}"
+            for log in logs[:20]
         ])
 
         prompt = f"""
-You are an SRE (Site Reliability Engineer) analyzing a production incident.
+        You are an SRE analyzing a production incident.
+        Service: {service or 'Multiple'}
+        Logs:
+        {log_text}
 
-CONTEXT:
-- Service affected: {service or 'Multiple services'}
-- Time window: Last few minutes
-- Error logs:
-{log_text}
+        Analyze the root cause and provide a report.
+        """
 
-TASK:
-Analyze these logs and provide a structured incident report.
+        # 2. Use JSON Mode (New SDK Feature)
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema={
+                    "type": "OBJECT",
+                    "properties": {
+                        "summary": {"type": "STRING"},
+                        "root_cause_hypothesis": {"type": "STRING"},
+                        "severity_score": {"type": "INTEGER"},
+                        "severity_level": {"type": "STRING"},
+                        "affected_services": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "key_errors": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "recommended_actions": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                    "required": ["summary", "root_cause_hypothesis", "severity_score", "severity_level"]
+                }
+            )
+        )
 
-OUTPUT FORMAT (STRICT JSON):
-{{
-    "summary": "One-line summary of what happened",
-    "root_cause_hypothesis": "Most likely root cause based on logs",
-    "severity_score": <number 0-100>,
-    "severity_level": "CRITICAL|HIGH|MEDIUM|LOW",
-    "affected_services": ["list", "of", "services"],
-    "key_errors": ["most", "important", "error", "patterns"],
-    "recommended_actions": ["immediate", "steps", "to", "take"]
-}}
+        # In JSON mode, response.text is guaranteed to be a JSON string
+        return response.text 
 
-RULES:
-- severity_score: 0-100 (0=minor, 100=critical outage)
-- severity_level: Map score to level (0-20=LOW, 21-50=MEDIUM, 51-80=HIGH, 81-100=CRITICAL)
-- Be concise but specific
-- Base everything ONLY on the provided logs
-"""
-        
-
-        response = model.generate_content(prompt)
-
-        #Extract JSON from response
-        response_text = response.text
-
-        #clean response
-        if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0]
-
-        elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0].strip()
-
-
-        analysis = json.loads(response_text)
-        return analysis  
-
-    except json.JSONDecodeError as e:  
-        print(f"Failed to parse Gemini response to JSON: {e}")
-        print(f"Raw respone : {response_text}")
-        return {
-            "summary": "AI analysis failed - invalid response format",
-            "root_cause_hypothesis": "Could not parse AI response",
-            "severity_score": 50,
-            "severity_level": "MEDIUM",
-            "affected_services": [service] if service else ["unknown"],
-            "key_errors": ["parsing error"],
-            "recommended_actions": ["Check Gemini API response", "Manual investigation required"]
-        }
     except Exception as e:
-        print(f"❌ Gemini analysis failed: {e}")
-        return {
-            "summary": "AI analysis failed",
+        logger.warning(f"Gemini analysis failed: {e}")
+        # Return a standard JSON string so the database always gets valid JSON
+        return json.dumps({
+            "summary": "AI analysis unavailable",
             "root_cause_hypothesis": str(e),
             "severity_score": 50,
             "severity_level": "MEDIUM",
-            "affected_services": [service] if service else ["unknown"],
-            "key_errors": ["API error"],
-            "recommended_actions": ["Check Gemini API key", "Manual investigation required"]
-        }
-    
+            "affected_services": [service] if service else [],
+            "key_errors": [],
+            "recommended_actions": ["Manual investigation required"]
+        }, indent=2)
+
 def extract_keywords(logs: List[Dict[str, Any]]) -> List[str]:
-        """Extract keywords from logs for runbook matching"""
-        try:
-            model = genai.GenerativeModel(MODEL_NAME)
+    """
+    Extract technical keywords from logs.
+    """
+    try:
+        log_text = "\n".join([log.get("message", "") for log in logs[:10]])
+        prompt = f"Extract 5 technical keywords from these logs as a JSON array of strings: {log_text}"
 
-            log_text = "\n".join([
-                f"{log['service']} : {log['message']}"
-                for log in logs[:15]
-            ])
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            )
+        )
 
-            prompt = f"""
-Extract the top 5 technical keywords from these error logs.
-Keywords should be single words or short phrases useful for searching documentation.
+        # Parse and return as a Python list
+        keywords = json.loads(response.text)
+        return keywords if isinstance(keywords, list) else []
 
-Logs:
-{log_text}
-
-Return ONLY a JSON array of strings, like: ["postgres", "timeout", "connection", "pool", "deadlock"]
-"""
-            response = model.generate_content(prompt)
-            response_text = response.text.strip()
-
-            #clean response
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0]
-
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-
-            keywords = json.loads(response_text)
- 
-            return keywords if isinstance(keywords, list) else []
-        except Exception as e:
-            print(f"Failed to extract keywords: {e}")
-            return []
-
-    
-
-# Test function
-if __name__ == "__main__":
-    # Test with sample logs
-    test_logs = [
-        {"timestamp": "2024-01-01T10:00:00Z", "service": "payment", "level": "ERROR", 
-         "message": "Database connection timeout after 30s"},
-        {"timestamp": "2024-01-01T10:00:01Z", "service": "payment", "level": "ERROR",
-         "message": "Failed to execute query: connection refused"},
-        {"timestamp": "2024-01-01T10:00:02Z", "service": "payment", "level": "ERROR",
-         "message": "Transaction rollback due to connection loss"},
-    ]
-    
-    print("🧪 Testing incident analysis...")
-    analysis = analyze_incident(test_logs, service="payment")
-    print(json.dumps(analysis, indent=2))
-    
-    print("\n🧪 Testing keyword extraction...")
-    keywords = extract_keywords(test_logs)
-    print(f"Keywords: {keywords}")
+    except Exception as e:
+        logger.warning(f"Keyword extraction failed: {e}")
+        return []
