@@ -1,28 +1,99 @@
+from google import genai
+from google.genai import types # Required for JSON mode configuration
 import os
-import google.generativeai as genai
-from dotenv import load_dotenv
+import json
+import logging
+from typing import Dict, Any, List
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
-API_KEY = os.getenv("GEMINI_API_KEY")
-if not API_KEY:
-    raise ValueError("GEMINI_API_KEY is not set")
+# Use gemini-1.5-flash for faster, cheaper processing for logs
+MODEL_NAME = "models/gemini-2.5-flash"
 
-genai.configure(api_key=API_KEY)
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-#Simple Test Function
-
-def test_gemini_connection(prompt: str = "Say hello in one sentence") -> str:
+def analyze_incident(
+    logs: List[Dict[str, Any]],
+    service: str | None = None
+) -> str:
+    """
+    Analyze incident logs using Gemini.
+    Returns JSON as STRING (DB-safe).
+    """
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # 1. Format logs for the prompt
+        log_text = "\n".join([
+            f"[{log.get('timestamp')}] {log.get('service')} : {log.get('message')}"
+            for log in logs[:20]
+        ])
 
-        response = model.generate_content(prompt)
-        return response.text
+        prompt = f"""
+        You are an SRE analyzing a production incident.
+        Service: {service or 'Multiple'}
+        Logs:
+        {log_text}
+
+        Analyze the root cause and provide a report.
+        """
+
+        # 2. Use JSON Mode (New SDK Feature)
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema={
+                    "type": "OBJECT",
+                    "properties": {
+                        "summary": {"type": "STRING"},
+                        "root_cause_hypothesis": {"type": "STRING"},
+                        "severity_score": {"type": "INTEGER"},
+                        "severity_level": {"type": "STRING"},
+                        "affected_services": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "key_errors": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "recommended_actions": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                    "required": ["summary", "root_cause_hypothesis", "severity_score", "severity_level"]
+                }
+            )
+        )
+
+        # In JSON mode, response.text is guaranteed to be a JSON string
+        return response.text 
+
     except Exception as e:
-        return f"Error: {str(e)}"
-    
+        logger.warning(f"Gemini analysis failed: {e}")
+        # Return a standard JSON string so the database always gets valid JSON
+        return json.dumps({
+            "summary": "AI analysis unavailable",
+            "root_cause_hypothesis": str(e),
+            "severity_score": 50,
+            "severity_level": "MEDIUM",
+            "affected_services": [service] if service else [],
+            "key_errors": [],
+            "recommended_actions": ["Manual investigation required"]
+        }, indent=2)
 
-if __name__ == "__main__":
-    print("Testing Gemini connection...")
-    result = test_gemini_connection()
-    print(f"Response: {result}")
+def extract_keywords(logs: List[Dict[str, Any]]) -> List[str]:
+    """
+    Extract technical keywords from logs.
+    """
+    try:
+        log_text = "\n".join([log.get("message", "") for log in logs[:10]])
+        prompt = f"Extract 5 technical keywords from these logs as a JSON array of strings: {log_text}"
+
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            )
+        )
+
+        # Parse and return as a Python list
+        keywords = json.loads(response.text)
+        return keywords if isinstance(keywords, list) else []
+
+    except Exception as e:
+        logger.warning(f"Keyword extraction failed: {e}")
+        return []
