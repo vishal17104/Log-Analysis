@@ -5,21 +5,18 @@ from typing import Literal, Optional, List, Dict, Any
 # ---------------- LOG SCHEMAS ---------------- #
 
 class LogCreate(BaseModel):
-    # Default factory ensures a timestamp is generated if not provided
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
     service: str = Field(..., max_length=50)
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"]
-    # min_length=1 ensures the 'empty_string' chaos test fails correctly
     message: str = Field(..., min_length=1, max_length=500)
 
-    # Optional metadata fields (required for your mock_data generator)
-    host: Optional[str] = Field(None, description="Hostname")
-    pid: Optional[int] = Field(None, description="Process ID")
-    ip_address: Optional[str] = Field(None, description="Client IP")
-    status_code: Optional[int] = Field(None, description="HTTP status code")
-    trace_id: Optional[str] = Field(None, description="Distributed tracing ID")
+    host: Optional[str] = None
+    pid: Optional[int] = None
+    ip_address: Optional[str] = None
+    status_code: Optional[int] = None
+    trace_id: Optional[str] = None
 
     @field_validator("service")
     @classmethod
@@ -33,9 +30,7 @@ class LogCreate(BaseModel):
 
 class LogResponse(LogCreate):
     id: int
-    # Use Pydantic v2 ConfigDict for SQLAlchemy compatibility
     model_config = ConfigDict(from_attributes=True)
-
 
 class LogStats(BaseModel):
     total_logs: int
@@ -65,20 +60,22 @@ class IncidentResponse(IncidentBase):
     detected_at: datetime
     resolved_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    # ✅ NEW (Day 8)
+    ai_analysis: Optional[str] = None
 
+    model_config = ConfigDict(from_attributes=True)
 
-class IncidentStatusUpdate(IncidentResponse):
-    status:str # open, investigating, resolved
+class IncidentStatusUpdate(BaseModel):
+    status: str  # open, investigating, resolved
 
 class IncidentDetailResponse(IncidentResponse):
-    logs: List[dict] = [] # Will be populated with related logs
+    logs: List[dict] = []
 
 class IncidentSummary(BaseModel):
     total_incidents: int
     open_incidents: int
     resolved_incidents: int
     by_severity: Dict[str, int]
-    avg_resolution_time: Optional[float] = None    
+    avg_resolution_time: Optional[float] = None
+
     model_config = ConfigDict(from_attributes=True)
