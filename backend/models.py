@@ -50,6 +50,9 @@ class Incident(Base):
 class Runbook(Base):
     __tablename__ = "runbooks"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100))
-    content = Column(Text)
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, index=True)
+    title = Column(String(200), nullable=True)
+    content = Column(Text) #markdown content
+    tags = Column(JSON, nullable=True) #keywords for matching
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -269,3 +269,51 @@ def get_incident_summary(db: Session, days: int = 7):
         "by_severity": {s: c for s, c in severity_counts},
         "avg_resolution_time": avg_time
     }
+
+#=======RUNBOOKS=======
+
+def get_all_runbooks(db: Session, skip: int = 0, limit: int = 100):
+    "Get all runbooks"
+    return db.query(models.Runbook).offset(skip).limit(limit).all()
+
+def get_runbook_by_name(db: Session, name: str):
+    return db.query(models.Runbook).filter(models.Runbook.name == name).first()
+
+def create_runbook(db: Session, name: str, content: str, title: str = None, tags: list = None):
+    db_runbook = models.Runbook(
+        name = name,
+        title = title or name.replace('_', ' ').replace('.md', '').title(),
+        content = content,
+        tags = tags or []
+    )
+    db.add(db_runbook)
+    db.commit()
+    db.refresh(db_runbook)
+    return db_runbook
+
+def match_runbooks_by_keywords(db: Session, keywords: list, service: str = None):
+    """Find runbooks that match given keywords and service"""
+    
+    runbooks = db.query(models.Runbook).all()
+    matches = []
+
+    for runbook in runbooks:
+        score = 0
+        runbook_tags = runbook.tags or []
+        
+        # Service match (if service provided)
+        if service and service.lower() in [t.lower() for t in runbook_tags]:
+            score += 2  # Service match is important!
+        
+        # Keyword matching
+        for kw in keywords:
+            if any(kw.lower() in tag.lower() for tag in runbook_tags):
+                score += 1
+            if kw.lower() in runbook.content.lower():
+                score += 0.5
+
+        if score > 0:
+            matches.append((score, runbook))
+
+    matches.sort(reverse=True)  # highest score first
+    return [r for _, r in matches]
