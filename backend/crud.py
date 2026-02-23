@@ -171,6 +171,12 @@ def get_incident(db: Session, incident_id: int):
         models.Incident.id == incident_id
     ).first()
 
+def get_incident_reasoning(db: Session, incident_id: int):
+    """Get AI reasoning for an incident"""
+    return db.query(models.IncidentReasoning).filter(
+        models.IncidentReasoning.incident_id == incident_id
+    ).first()
+
 def get_detailed_incidents(db: Session, incident_id: int):
     """Get detailed incident info including logs"""
     incident = get_incident(db, incident_id)
@@ -317,3 +323,28 @@ def match_runbooks_by_keywords(db: Session, keywords: list, service: str = None)
 
     matches.sort(reverse=True)  # highest score first
     return [r for _, r in matches]
+
+def get_runbook_by_service_type(db: Session, service: str, error_type: str):
+    """Get runbook by service and error type (Smruti's design)"""
+    return db.query(models.Runbook).filter(
+        models.Runbook.service == service,
+        models.Runbook.error_type == error_type
+    ).first()
+
+def create_runbook_by_service(db: Session, service: str, error_type: str, content: str, title: str = None, tags: list = None, name:str = None):
+    """Create runbook with service/error_type as primary key"""
+    if not name:
+        name = f"{service}_{error_type}.md"
+    
+    db_runbook = models.Runbook(
+        service=service,
+        error_type=error_type,
+        name=name,
+        title=title,
+        content=content,
+        tags=tags or []
+    )
+    db.add(db_runbook)
+    db.commit()
+    db.refresh(db_runbook)
+    return db_runbook

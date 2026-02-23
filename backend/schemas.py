@@ -86,8 +86,13 @@ class RunbookBase(BaseModel):
     content: str
     tags: Optional[List[str]] = []
 
-class RunbookCreate(RunbookBase):
-    pass
+class RunbookCreate(BaseModel):
+    name: Optional[str] = None  
+    service: str 
+    error_type: str
+    title: Optional[str] = None
+    content: str
+    tags: Optional[List[str]] = []
 
 class RunbookUpdate(BaseModel):
     title: Optional[str] = None

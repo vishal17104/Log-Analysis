@@ -27,16 +27,12 @@ def create_incident_from_spike(
         window_end=spike_data["window_end"],
         status="open"
     )
-
-    # 2️⃣ Create incident FIRST (never depend on AI)
     incident = crud.create_incident(db, incident_data)
 
     logger.info(
         f"Incident created for {spike_data['service']} "
         f"(severity={spike_data['severity']})"
     )
-
-    # 3️⃣ AI analysis (safe & optional)
     try:
         ai_result = analyze_incident(
             logs=spike_data.get("logs", []),
