@@ -79,3 +79,25 @@ class IncidentSummary(BaseModel):
     avg_resolution_time: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class RunbookBase(BaseModel):
+    name: str
+    title: Optional[str] = None
+    content: str
+    tags: Optional[List[str]] = []
+
+class RunbookCreate(RunbookBase):
+    pass
+
+class RunbookUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+class RunbookResponse(RunbookBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
