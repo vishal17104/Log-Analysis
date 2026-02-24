@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routers import logs, incidents, runbooks  # ← Added runbooks
+from backend.routers import logs, incidents, runbooks, agent_router
 from backend.database import engine
 from backend import models
 
@@ -19,7 +19,8 @@ app.add_middleware(
 # Include all routers
 app.include_router(logs.router)
 app.include_router(incidents.router)
-app.include_router(runbooks.router) 
+app.include_router(runbooks.router)
+app.include_router(agent_router.router) 
 
 @app.get("/")
 def root():
@@ -29,7 +30,8 @@ def root():
         "endpoints": {
             "logs": "/logs",
             "incidents": "/incidents",
-            "runbooks": "/runbooks",  # ← Added
+            "runbooks": "/runbooks",
+            "agent": "/agent",
             "docs": "/docs"
         }
     }
