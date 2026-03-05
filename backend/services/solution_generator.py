@@ -1,7 +1,7 @@
-from datetime import datetime
 import os
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Dict, Any
 from dotenv import load_dotenv
 
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend import models, crud
 
 from google import genai
+from google.genai import types
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -17,28 +18,28 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise ValueError("GEMINI_API_KEY not found")
 
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-1.5-flash"
 
-# Initialize Gemini client once
+# Initialize Gemini client
 client = genai.Client(api_key=API_KEY)
 
 
 class SolutionGenerator:
-    """Generates specific solutions for incidents using AI"""
+    """Generates AI-powered incident solutions"""
 
     def __init__(self, db: Session):
         self.db = db
 
-    def generate_solution(self, incident_id: int, prompt_template: str = None) -> Dict[str, Any]:
+    def generate_solution(self, incident_id: int) -> Dict[str, Any]:
 
-        # Get incident
+        # 1️⃣ Fetch incident
         incident = crud.get_incident(self.db, incident_id)
-        reasoning = crud.get_incident_reasoning(self.db, incident_id)
-
         if not incident:
             return {"error": f"Incident {incident_id} not found"}
 
-        # Get logs
+        reasoning = crud.get_incident_reasoning(self.db, incident_id)
+
+        # 2️⃣ Fetch related logs
         logs = []
         if incident.window_start and incident.window_end:
             logs = (
@@ -49,11 +50,10 @@ class SolutionGenerator:
                     models.Log.level == "ERROR",
                 )
                 .order_by(models.Log.timestamp)
-                .limit(20)
+                .limit(15)
                 .all()
             )
 
-        # Format logs
         log_text = (
             "\n".join(
                 [f"[{log.timestamp}] {log.service}: {log.message}" for log in logs]
@@ -62,160 +62,96 @@ class SolutionGenerator:
             else "No logs available"
         )
 
-        # Default prompt
-        if not prompt_template:
-            prompt_template = self._get_default_prompt()
+        # 3️⃣ Build default prompt
+        prompt = f"""
+You are a Site Reliability Engineer (SRE) responding to a production incident.
 
-        # Safer service extraction
-        service = "unknown"
-        if incident.title and "in " in incident.title:
-            try:
-                service = incident.title.split("in ")[-1].split()[0]
-            except Exception:
-                pass
+INCIDENT DETAILS
+Title: {incident.title}
+Severity: {incident.severity}
 
-        context = {
-            "incident_title": incident.title,
-            "severity": incident.severity,
-            "error_count": incident.error_count,
-            "service": service,
-            "ai_summary": reasoning.ai_summary if reasoning else "No AI summary available",
-            "root_cause": reasoning.root_cause if reasoning else "Unknown",
-            "keywords": reasoning.keywords if reasoning and reasoning.keywords else [],
-            "logs": log_text,
-        }
+AI ANALYSIS
+Summary: {reasoning.ai_summary if reasoning else "N/A"}
+Root Cause: {reasoning.root_cause if reasoning else "Unknown"}
 
-        prompt = prompt_template.format(**context)
+RECENT ERROR LOGS
+{log_text}
+
+TASK:
+Provide a JSON response with the following fields:
+
+- immediate_actions (list of commands to run immediately)
+- verification (how to confirm the fix worked)
+- root_cause_confirmed (short explanation)
+- prevention (steps to prevent recurrence)
+- confidence (HIGH | MEDIUM | LOW)
+"""
 
         try:
 
+            # 4️⃣ Call Gemini with JSON Mode
             response = client.models.generate_content(
                 model=MODEL_NAME,
                 contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                ),
             )
 
-            solution = self._parse_solution_response(response.text)
+            # 5️⃣ Parse JSON safely
+            solution = json.loads(response.text.strip())
 
-            solution["incident_id"] = incident_id
-            solution["generated_at"] = str(datetime.utcnow())
-            solution["model_used"] = MODEL_NAME
-
-            return solution
-
-        except Exception as e:
-            logger.exception("Error generating solution")
-
-            return {
-                "incident_id": incident_id,
-                "error": str(e),
-                "fallback_solution": self._get_fallback_solution(context),
-            }
-
-    def _get_default_prompt(self) -> str:
-        return """
-You are an SRE (Site Reliability Engineer) tasked with creating a solution for a production incident.
-
-INCIDENT DETAILS:
-- Title: {incident_title}
-- Severity: {severity}
-- Affected Service: {service}
-- Error Count: {error_count}
-
-AI ANALYSIS:
-- Summary: {ai_summary}
-- Root Cause Hypothesis: {root_cause}
-- Keywords: {keywords}
-
-ERROR LOGS:
-{logs}
-
-TASK:
-Based on the above information, provide a detailed solution for this incident.
-
-YOUR SOLUTION MUST INCLUDE:
-1. IMMEDIATE ACTIONS: Step-by-step commands to run right now
-2. VERIFICATION: How to confirm the fix worked
-3. ROOT CAUSE CONFIRMATION: What actually caused this
-4. PREVENTION: How to prevent this in the future
-
-FORMAT YOUR RESPONSE AS JSON:
-
-{
-    "immediate_actions": [
-        "step 1 with actual command",
-        "step 2 with actual command"
-    ],
-    "verification": "command or process to verify",
-    "root_cause_confirmed": "brief explanation",
-    "prevention": "steps to prevent recurrence",
-    "estimated_resolution_time": "X minutes",
-    "confidence": "HIGH|MEDIUM|LOW"
-}
-
-Be specific. Use actual Linux/bash commands where applicable.
-"""
-
-    def _parse_solution_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse Gemini response to extract JSON solution"""
-
-        try:
-
-            # remove markdown
-            if "```json" in response_text:
-                response_text = (
-                    response_text.split("```json")[1].split("```")[0].strip()
-                )
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-
-            solution = json.loads(response_text)
-
-            required = [
+            # Ensure required fields exist
+            required_fields = [
                 "immediate_actions",
                 "verification",
                 "root_cause_confirmed",
             ]
 
-            for field in required:
+            for field in required_fields:
                 if field not in solution:
-                    solution[field] = f"Missing {field} from AI"
+                    solution[field] = f"Missing {field}"
+
+            # Add metadata
+            solution["incident_id"] = incident_id
+            solution["generated_at"] = datetime.now(timezone.utc).isoformat()
+            solution["model_used"] = MODEL_NAME
 
             return solution
 
-        except json.JSONDecodeError as e:
+        except Exception as e:
+            logger.exception("AI Solution Generation Failed")
 
-            logger.error(f"Failed to parse AI response as JSON: {e}")
-            logger.debug(f"Raw response: {response_text}")
+            # Extract service safely
+            service = "unknown"
 
-            return {
-                "error": "Failed to parse AI response",
-                "raw_response": response_text[:500],
-                "immediate_actions": ["Manual investigation required"],
-                "verification": "Check logs manually",
-                "root_cause_confirmed": "AI parsing failed",
-            }
+            if incident.title and "in " in incident.title:
+                try:
+                    service = incident.title.split("in ")[-1].split()[0]
+                except Exception:
+                    pass
 
-    def _get_fallback_solution(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Fallback solution when AI fails"""
+            return self._get_fallback_solution(incident_id, service)
 
-        service = context.get("service", "unknown")
+    def _get_fallback_solution(self, incident_id: int, service: str) -> Dict[str, Any]:
+        """Fallback if AI generation fails"""
 
         return {
+            "incident_id": incident_id,
             "immediate_actions": [
-                f"Check {service} service logs: kubectl logs -l service={service}",
-                f"Restart {service} service: kubectl rollout restart deployment/{service}",
-                "Check dependent services",
+                f"kubectl logs -l service={service}",
+                f"kubectl rollout restart deployment/{service}",
             ],
-            "verification": f"curl -f http://{service}/health",
-            "root_cause_confirmed": "AI analysis unavailable - manual investigation needed",
-            "prevention": "Set up better monitoring and alerts",
-            "estimated_resolution_time": "15 minutes",
+            "verification": "Check service health endpoint",
+            "root_cause_confirmed": "Manual investigation required (AI fallback)",
+            "prevention": "Review logs and add better monitoring",
             "confidence": "LOW",
-            "note": "This is a fallback solution - AI generation failed",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "note": "Fallback solution used because AI generation failed",
         }
 
 
-def generate_solution_for_incident(db: Session, incident_id: int, template: str = None):
-
+# Convenience wrapper
+def generate_solution_for_incident(db: Session, incident_id: int):
     generator = SolutionGenerator(db)
-    return generator.generate_solution(incident_id, template)
+    return generator.generate_solution(incident_id)
