@@ -4,6 +4,8 @@ from typing import Dict, Any, Optional
 from backend.database import get_db
 from backend import crud
 from backend.services.runbook_service import RunbookService
+from backend.services.solution_generator import SolutionGenerator
+from backend.prompts.solution_templates import get_template_for_incident
 import logging
 
 logger = logging.getLogger(__name__)
@@ -132,3 +134,23 @@ def agent_status(
         "agent_version": "1.0",
         "timestamp": "2024-01-01T00:00:00Z"
     }
+
+@router.post("/generate-solution/{incident_id}")
+def generate_solution(
+    incident_id: int,
+    db: Session = Depends(get_db)
+):
+    """Generate AI solution for an incident"""
+    generator = SolutionGenerator(db)
+    
+    #Get incident to determine template
+    incident = crud.get_incident(db, incident_id)
+    reasoning = crud.get_incident_reasoning(db, incident_id)
+    
+    #Select appropriate template
+    service = incident.title.split('in ')[-1].split(' ')[0] if 'in ' in incident.title else "unknown"
+    keywords = reasoning.keywords if reasoning and reasoning.keywords else []
+    template = get_template_for_incident(service, keywords)
+    
+    solution = generator.generate_solution(incident_id, template)
+    return solution
