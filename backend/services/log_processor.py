@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend import models, crud, schemas
 from backend.database import SessionLocal
+from backend.services.notifier import notifier
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,7 @@ class LogProcessor:
 
             self.processed_count += len(logs)
 
+            # Notify websocket dashboard
             await self._notify_clients(
                 {
                     "type": "batch_processed",
@@ -121,7 +123,7 @@ class LogProcessor:
             db.query(models.Incident)
             .filter(
                 models.Incident.service == service,
-                models.Incident.status == "open",   # fixed
+                models.Incident.status == "open",
             )
             .first()
         )
@@ -141,11 +143,16 @@ class LogProcessor:
             "window_end": datetime.utcnow(),
         }
 
-        # Convert dict -> schema
+        # Convert dict → schema
         incident_schema = schemas.IncidentCreate(**incident_data)
 
+        # Create incident
         incident = crud.create_incident(db, incident_schema)
 
+        # 🔔 TRIGGER NOTIFICATIONS (THIS WAS MISSING)
+        notifier.send_all(incident)
+
+        # Notify websocket clients
         await self._notify_clients(
             {
                 "type": "incident_created",
