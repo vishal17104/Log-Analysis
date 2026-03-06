@@ -1,19 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from backend.routers import (
     logs,
     incidents,
     runbooks,
     agent_router,
     recommendation_router,
-    log_stream,  # NEW (WebSocket router)
+    log_stream, 
 )
-
 from backend.database import engine
 from backend import models
-
-from backend.services.log_processor import start_processor  # NEW
+from backend.services.log_processor import start_processor
+from backend.routers import notifications
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -35,9 +33,11 @@ app.include_router(incidents.router)
 app.include_router(runbooks.router)
 app.include_router(agent_router.router)
 app.include_router(recommendation_router.router)
+app.include_router(notifications.router)
 
 # Include WebSocket router
-app.include_router(log_stream.router)  # NEW
+app.include_router(log_stream.router)
+
 
 
 # Start background log processor

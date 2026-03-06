@@ -11,7 +11,7 @@ from backend.services.incident_service import (
     create_incident_from_spike,
     get_open_incident_for_service
 )
-
+from backend.services.notifier import notifier
 # ---------------- CONFIG ---------------- #
 
 ERROR_THRESHOLD = 2              # errors per minute
@@ -143,7 +143,7 @@ def fetch_recent_error_logs(
 
 def detect_and_create_incidents(db: Session):
     """
-    Main detection pipeline
+    Main detection pipeline with notifications
     """
     logger.info("Running incident detection...")
 
@@ -180,30 +180,19 @@ def detect_and_create_incidents(db: Session):
         # 🔥 PASS LOGS INTO INCIDENT SERVICE
         spike["logs"] = recent_logs
 
+        # 🚨 CREATE THE INCIDENT
         incident = create_incident_from_spike(db, spike)
         logger.info(f"🚨 Created incident #{incident.id} for {service}")
 
-    logger.info("Detection complete")
-
-
-# ---------------- RUNNERS ---------------- #
-
-def detector_loop(interval_seconds: int = 60):
-    """
-    Run detector continuously (background mode)
-    """
-    logger.info(f"Starting detector loop (interval: {interval_seconds}s)")
-
-    while True:
+        # 🔔 SEND NOTIFICATIONS THROUGH ALL CHANNELS
         try:
-            db = SessionLocal()
-            detect_and_create_incidents(db)
-            db.close()
+            from backend.services.notifier import notifier
+            notifier.send_all(incident)
+            logger.info(f"🔔 Notifications sent for incident #{incident.id}")
         except Exception as e:
-            logger.error(f"Detector error: {e}")
+            logger.error(f"❌ Failed to send notifications for incident #{incident.id}: {e}")
 
-        time.sleep(interval_seconds)
-
+    logger.info("Detection complete")
 
 if __name__ == "__main__":
     db = SessionLocal()
