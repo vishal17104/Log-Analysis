@@ -4,6 +4,7 @@ from datetime import datetime
 
 Base = declarative_base()
 
+
 # ---------------- LOG MODEL ---------------- #
 
 class Log(Base):
@@ -24,7 +25,7 @@ class Log(Base):
 
     trace_id = Column(String, nullable=True, index=True)
 
-    # NEW FIELD REQUIRED BY LOG PROCESSOR
+    # Used by log processor
     processed = Column(Boolean, default=False, index=True)
 
 
@@ -36,7 +37,9 @@ class Incident(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     title = Column(String(200))
-    service = Column(String(100), index=True)   # REQUIRED FOR PROCESSOR
+
+    # REQUIRED for processor + notifier
+    service = Column(String(100), index=True)
 
     severity = Column(String(20), default="MEDIUM")
     status = Column(String(20), default="open")
@@ -54,8 +57,9 @@ class Incident(Base):
 
 class IncidentReasoning(Base):
     __tablename__ = "incident_reasoning"
-    
+
     id = Column(Integer, primary_key=True, index=True)
+
     incident_id = Column(Integer, ForeignKey("incidents.id"), unique=True)
 
     ai_summary = Column(Text, nullable=True)
@@ -85,9 +89,9 @@ class Runbook(Base):
     name = Column(String(100), unique=True, index=True, nullable=True)
     title = Column(String(200), nullable=True)
 
-    content = Column(Text)  # markdown content
+    content = Column(Text)
 
-    tags = Column(JSON, nullable=True)  # keywords for matching
+    tags = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
