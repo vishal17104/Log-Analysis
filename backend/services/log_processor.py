@@ -4,14 +4,14 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 
-from backend import models, crud
+from backend import models, crud, schemas
 from backend.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
 
 class LogProcessor:
-    """Async log processor"""
+    """Async background log processor"""
 
     def __init__(self, batch_size: int = 100, interval_seconds: int = 10):
         self.batch_size = batch_size
@@ -23,6 +23,7 @@ class LogProcessor:
     async def start(self):
         """Start the background processor"""
         self.running = True
+
         logger.info(
             f"Log processor started (batch: {self.batch_size}, interval: {self.interval}s)"
         )
@@ -36,12 +37,13 @@ class LogProcessor:
             await asyncio.sleep(self.interval)
 
     async def stop(self):
-        """Stop the background processor"""
+        """Stop processor"""
         self.running = False
         logger.info("Log processor stopped")
 
     async def _process_batch(self):
         """Process a batch of unprocessed logs"""
+
         db = SessionLocal()
 
         try:
@@ -63,25 +65,27 @@ class LogProcessor:
             for log in logs:
                 by_service.setdefault(log.service, []).append(log)
 
-            # Analyze errors per service
+            # Analyze errors
             for service, service_logs in by_service.items():
+
                 error_count = sum(1 for l in service_logs if l.level == "ERROR")
 
                 if error_count >= 5:
+
                     logger.info(
                         f"High error rate detected in {service}: {error_count} errors"
                     )
 
                     await self._check_for_incident(db, service)
 
-            # Mark logs as processed
+            # Mark logs processed
             for log in logs:
                 log.processed = True
 
             db.commit()
+
             self.processed_count += len(logs)
 
-            # Notify WebSocket clients
             await self._notify_clients(
                 {
                     "type": "batch_processed",
@@ -95,7 +99,7 @@ class LogProcessor:
             db.close()
 
     async def _check_for_incident(self, db: Session, service: str):
-        """Check for error spikes and create incidents"""
+        """Check for spike and create incident"""
 
         cutoff = datetime.utcnow() - timedelta(minutes=5)
 
@@ -117,7 +121,7 @@ class LogProcessor:
             db.query(models.Incident)
             .filter(
                 models.Incident.service == service,
-                models.Incident.status == "OPEN",
+                models.Incident.status == "open",   # fixed
             )
             .first()
         )
@@ -137,7 +141,10 @@ class LogProcessor:
             "window_end": datetime.utcnow(),
         }
 
-        incident = crud.create_incident(db, incident_data)
+        # Convert dict -> schema
+        incident_schema = schemas.IncidentCreate(**incident_data)
+
+        incident = crud.create_incident(db, incident_schema)
 
         await self._notify_clients(
             {
@@ -150,11 +157,12 @@ class LogProcessor:
         )
 
     def register_callback(self, callback):
-        """Register WebSocket callback for notifications"""
+        """Register websocket callback"""
         self.callbacks.append(callback)
 
     async def _notify_clients(self, data: Dict[str, Any]):
-        """Notify all WebSocket clients"""
+        """Notify websocket clients"""
+
         for callback in self.callbacks:
             try:
                 await callback(data)
@@ -166,10 +174,10 @@ processor = LogProcessor()
 
 
 async def start_processor():
-    """Start the processor (call from main.py)"""
+    """Start processor from FastAPI startup"""
     asyncio.create_task(processor.start())
 
 
 def get_processor():
-    """Get processor instance"""
+    """Return processor instance"""
     return processor
