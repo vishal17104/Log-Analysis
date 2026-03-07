@@ -12,11 +12,13 @@ from backend.services.incident_service import (
     get_open_incident_for_service
 )
 from backend.services.notifier import notifier
+from backend.services.pattern_matcher import get_pattern_matcher  # 👈 NEW IMPORT
+
 # ---------------- CONFIG ---------------- #
 
 ERROR_THRESHOLD = 2              # errors per minute
-TIME_WINDOW = 10                 # minutes to look back
-CONSECUTIVE_TIME = 2             # sustained minutes required
+TIME_WINDOW = 10                  # minutes to look back
+CONSECUTIVE_TIME = 2              # sustained minutes required
 
 SEVERITY_THRESHOLDS = {
     "CRITICAL": 50,
@@ -135,7 +137,7 @@ def fetch_recent_error_logs(
             "service": log.service,
             "level": log.level,
             "message": log.message,
-            "trace_id": log.trace_id
+            "trace_id": getattr(log, 'trace_id', None)
         }
         for log in logs
     ]
@@ -143,10 +145,11 @@ def fetch_recent_error_logs(
 
 def detect_and_create_incidents(db: Session):
     """
-    Main detection pipeline with notifications
+    Main detection pipeline with pattern matching
     """
     logger.info("Running incident detection...")
 
+    # 1️⃣ SPIKE-BASED DETECTION (existing)
     spikes = check_error_rate(db)
 
     for spike in spikes:
@@ -192,7 +195,62 @@ def detect_and_create_incidents(db: Session):
         except Exception as e:
             logger.error(f"❌ Failed to send notifications for incident #{incident.id}: {e}")
 
+    # 2️⃣ PATTERN-BASED DETECTION (NEW)
+    try:
+        matcher = get_pattern_matcher(db)
+        pattern_matches = matcher.match_recent_errors(minutes=TIME_WINDOW)
+        
+        if pattern_matches:
+            logger.info(f"📊 Found {len(pattern_matches)} pattern matches")
+            
+            # Group by pattern for better logging
+            pattern_summary = {}
+            for match in pattern_matches:
+                pattern = match["pattern"]
+                if pattern not in pattern_summary:
+                    pattern_summary[pattern] = {
+                        "count": 0,
+                        "services": set(),
+                        "runbook": match["suggested_runbook"]
+                    }
+                pattern_summary[pattern]["count"] += 1
+                pattern_summary[pattern]["services"].add(match["service"])
+            
+            # Log summary
+            for pattern, data in pattern_summary.items():
+                logger.info(
+                    f"  - {pattern}: {data['count']} matches "
+                    f"in {', '.join(data['services'])} "
+                    f"(runbook: {data['runbook']})"
+                )
+            
+            # 🔥 TODO: Create pattern-based incidents
+            # You could create a different type of incident for pattern matches
+            
+    except Exception as e:
+        logger.error(f"❌ Pattern matching failed: {e}")
+
     logger.info("Detection complete")
+
+
+# ---------------- RUNNERS ---------------- #
+
+def detector_loop(interval_seconds: int = 60):
+    """
+    Run detector continuously (background mode)
+    """
+    logger.info(f"Starting detector loop (interval: {interval_seconds}s)")
+
+    while True:
+        try:
+            db = SessionLocal()
+            detect_and_create_incidents(db)
+            db.close()
+        except Exception as e:
+            logger.error(f"Detector error: {e}")
+
+        time.sleep(interval_seconds)
+
 
 if __name__ == "__main__":
     db = SessionLocal()
