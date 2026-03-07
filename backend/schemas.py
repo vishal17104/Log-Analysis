@@ -42,13 +42,27 @@ class LogCreate(BaseModel):
         return v.lower()
 
 
-class LogResponse(LogCreate):
+class LogResponse(BaseModel):
+
     id: int
+    timestamp: datetime
+    service: str
+    level: str
+    message: str
+
+    host: Optional[str] = None
+    pid: Optional[int] = None
+    ip_address: Optional[str] = None
+    status_code: Optional[int] = None
+    trace_id: Optional[str] = None
+
+    processed: Optional[bool] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class LogStats(BaseModel):
+
     total_logs: int
     error_count: int
     warning_count: int
@@ -67,15 +81,10 @@ class LogStats(BaseModel):
 class IncidentBase(BaseModel):
 
     title: str
-
-    service: str   # ✅ REQUIRED for processor + notifier
-
+    service: str
     severity: str
-
     error_count: int
-
     window_start: datetime
-
     window_end: datetime
 
 
@@ -87,14 +96,9 @@ class IncidentCreate(IncidentBase):
 class IncidentResponse(IncidentBase):
 
     id: int
-
     status: str
-
     detected_at: datetime
-
     resolved_at: Optional[datetime] = None
-
-    # AI analysis result
     ai_analysis: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -102,7 +106,7 @@ class IncidentResponse(IncidentBase):
 
 class IncidentStatusUpdate(BaseModel):
 
-    status: str  # open | investigating | resolved
+    status: str
 
 
 class IncidentDetailResponse(IncidentResponse):
@@ -113,13 +117,9 @@ class IncidentDetailResponse(IncidentResponse):
 class IncidentSummary(BaseModel):
 
     total_incidents: int
-
     open_incidents: int
-
     resolved_incidents: int
-
     by_severity: Dict[str, int]
-
     avg_resolution_time: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -130,44 +130,32 @@ class IncidentSummary(BaseModel):
 class RunbookBase(BaseModel):
 
     name: str
-
     title: Optional[str] = None
-
     content: str
-
     tags: Optional[List[str]] = []
 
 
 class RunbookCreate(BaseModel):
 
     name: Optional[str] = None
-
     service: str
-
     error_type: str
-
     title: Optional[str] = None
-
     content: str
-
     tags: Optional[List[str]] = []
 
 
 class RunbookUpdate(BaseModel):
 
     title: Optional[str] = None
-
     content: Optional[str] = None
-
     tags: Optional[List[str]] = None
 
 
 class RunbookResponse(RunbookBase):
 
     id: int
-
     created_at: datetime
-
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
