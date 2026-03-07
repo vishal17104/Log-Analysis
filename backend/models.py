@@ -17,7 +17,7 @@ class Log(Base):
     message = Column(Text)
     raw_data = Column(JSON, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     host = Column(String, nullable=True, index=True)
     pid = Column(Integer, nullable=True, index=True)
     ip_address = Column(String, nullable=True, index=True)
@@ -38,18 +38,20 @@ class Incident(Base):
 
     title = Column(String(200))
 
-    # REQUIRED for processor + notifier
     service = Column(String(100), index=True)
 
     severity = Column(String(20), default="MEDIUM")
-    status = Column(String(20), default="open")
+
+    status = Column(String(20), default="open", index=True)
 
     error_count = Column(Integer, default=0)
 
-    detected_at = Column(DateTime, default=datetime.utcnow)
+    detected_at = Column(DateTime, default=datetime.utcnow, index=True)
+
     resolved_at = Column(DateTime, nullable=True)
 
     window_start = Column(DateTime, nullable=True)
+
     window_end = Column(DateTime, nullable=True)
 
 
@@ -60,7 +62,7 @@ class IncidentReasoning(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    incident_id = Column(Integer, ForeignKey("incidents.id"), unique=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id"), unique=True, index=True)
 
     ai_summary = Column(Text, nullable=True)
     root_cause = Column(Text, nullable=True)
@@ -73,7 +75,7 @@ class IncidentReasoning(Base):
 
     raw_ai_response = Column(JSON, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
 # ---------------- RUNBOOK MODEL ---------------- #
@@ -93,5 +95,5 @@ class Runbook(Base):
 
     tags = Column(JSON, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
