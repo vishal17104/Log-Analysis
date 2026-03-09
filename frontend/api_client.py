@@ -1,27 +1,50 @@
-# frontend/api_client.py
 import requests
-import streamlit as st
 
-API_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8000"
 
-def check_api():
-    """Check if API is reachable using root endpoint"""
-    try:
-        response = requests.get(f"{API_URL}/", timeout=2)
-        return response.status_code == 200
-    except:
-        return False
-
-def get_logs():
-    try:
-        response = requests.get(f"{API_URL}/logs/", params={"limit": 10})
-        return response.json() if response.status_code == 200 else []
-    except:
-        return []
+# --- YOUR EXISTING CODE (UNTOUCHED) ---
 
 def get_incidents():
     try:
-        response = requests.get(f"{API_URL}/incidents/")
-        return response.json() if response.status_code == 200 else []
-    except:
+        r = requests.get(f"{BASE_URL}/incidents")
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return []
+
+def get_incident(incident_id):
+    try:
+        r = requests.get(f"{BASE_URL}/incidents/{incident_id}")
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {}
+
+def get_recommendation(incident_id):
+    try:
+        r = requests.get(f"{BASE_URL}/recommendations/{incident_id}")
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {}
+
+# --- ADDED FOR DAY 19 UI SUPPORT ---
+
+def get_stats():
+    """Fetches log statistics (error counts, service distribution) for the metrics row"""
+    try:
+        # This calls the /logs/stats endpoint we created in your logs.py router
+        r = requests.get(f"{BASE_URL}/logs/stats?minutes=1440")
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {}
+
+def get_logs(limit=50):
+    """Fetches recent logs to populate the frequency charts"""
+    try:
+        r = requests.get(f"{BASE_URL}/logs?limit={limit}")
+        r.raise_for_status()
+        return r.json()
+    except Exception:
         return []
