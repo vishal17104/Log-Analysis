@@ -1,0 +1,53 @@
+patterns:
+  database_connection:
+    keywords:
+      - "connection refused"
+      - "timeout"
+      - "cannot connect"
+      - "dial tcp"
+    services:
+      - "database"
+      - "postgres"
+      - "mysql"
+      - "redis"
+    severity_boost: 1.2
+    suggested_runbook: "database_restart.md"
+
+  api_rate_limit:
+    keywords:
+      - "rate limit"
+      - "too many requests"
+      - "429"
+      - "throttled"
+    services:
+      - "api"
+      - "gateway"
+      - "nginx"
+    severity_boost: 1.1
+    suggested_runbook: "api_rate_limit.md"
+
+  memory_leak:
+    keywords:
+      - "out of memory"
+      - "heap"
+      - "allocation failure"
+      - "OOM"
+    services:
+      - "worker"
+      - "api"
+      - "frontend"
+    severity_boost: 1.3
+    suggested_runbook: "memory_leak.md"
+
+  deployment_failure:
+    keywords:
+      - "deployment failed"
+      - "rollback"
+      - "new version"
+      - "canary"
+    services:
+      - "k8s"
+      - "kubernetes"
+      - "ci/cd"
+    severity_boost: 1.4
+    suggested_runbook: "rollback.md"
