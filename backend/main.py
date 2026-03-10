@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.routers import (
@@ -12,6 +14,8 @@ from backend.database import engine
 from backend import models
 from backend.services.log_processor import start_processor
 from backend.routers import notifications
+from backend.routers import ws_logs
+from backend.services.log_broadcaster import start_broadcaster
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -37,13 +41,16 @@ app.include_router(notifications.router)
 
 # Include WebSocket router
 app.include_router(log_stream.router)
+app.include_router(ws_logs.router)
 
-
+logger = logging.getLogger(__name__)
 
 # Start background log processor
 @app.on_event("startup")
 async def startup_event():
     await start_processor()
+    await start_broadcaster()
+    logger.info("Log broadcaster started")
 
 
 @app.get("/")
