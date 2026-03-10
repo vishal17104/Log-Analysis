@@ -155,3 +155,42 @@ def generate_solution_endpoint(
     solution = generate_solution_for_incident(db, incident_id)
 
     return solution
+
+@router.get("/incidents")
+def list_incidents_for_agent(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """Get incidents for agent dropdown"""
+
+    incidents = crud.get_incidents(db, skip=skip, limit=limit)
+
+    return [
+        {
+            "id": i.id,
+            "title": i.title,
+            "severity": i.severity,
+            "status": i.status,
+            "service": getattr(i, 'service', 'unknown'),
+            "error_count": i.error_count,
+            "detected_at": i.detected_at.isoformat()
+        }
+        for i in incidents
+    ]
+
+@router.get("/status/{incident_id}")
+def get_incident_status(
+    incident_id: int,
+    db: Session = Depends(get_db)
+):
+    
+    """Get current processing status for an incident"""
+
+    #to track if incident was processed by agent
+    return {
+        "incident_id": incident_id,
+        "processed": False,
+        "last_action": None,
+        "timestamp": datetime.utcnow().isoformat()
+    }
