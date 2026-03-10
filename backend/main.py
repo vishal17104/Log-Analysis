@@ -16,22 +16,16 @@ from backend.routers import (
     agent_router,
     recommendation_router,
     log_stream,
-    notifications
+    notifications,
+    ws_logs
 )
-<<<<<<< HEAD
-from backend.database import engine
-from backend import models
-from backend.services.log_processor import start_processor
-from backend.routers import notifications
-from backend.routers import ws_logs
-from backend.services.log_broadcaster import start_broadcaster
-=======
->>>>>>> origin/live-feed
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Agentic Log Analyzer")
+
+logger = logging.getLogger(__name__)
 
 # Enable CORS
 app.add_middleware(
@@ -50,26 +44,17 @@ app.include_router(agent_router.router)
 app.include_router(recommendation_router.router)
 app.include_router(notifications.router)
 
-# Include WebSocket router
+# Include WebSocket routers
 app.include_router(log_stream.router)
 app.include_router(ws_logs.router)
 
-<<<<<<< HEAD
-logger = logging.getLogger(__name__)
-
-# Start background log processor
-=======
 # Startup background services
->>>>>>> origin/live-feed
 @app.on_event("startup")
 async def startup_event():
     await start_processor()
     await start_broadcaster()
-<<<<<<< HEAD
-    logger.info("Log broadcaster started")
+    logger.info("Log processor and broadcaster started")
 
-=======
->>>>>>> origin/live-feed
 
 @app.get("/")
 def root():
