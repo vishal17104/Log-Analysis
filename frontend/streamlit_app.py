@@ -5,6 +5,7 @@ from streamlit_autorefresh import st_autorefresh
 from api_client import get_stats, get_incidents, get_logs
 from charts import render_error_frequency, render_severity_distribution
 from incident_view import render_incident_list
+from agent_control import render_agent_control
 
 
 # ---------------- PAGE CONFIG ---------------- #
@@ -53,6 +54,17 @@ st.markdown("""
     .block-container {
         padding-top: 2rem;
     }
+
+    /* FIX: Button styling */
+    .stButton>button {
+        background-color: #00d1ff;
+        color: #0e1117;
+        font-weight: bold;
+        border-radius: 8px;
+        border: none;
+        padding: 10px 24px;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -66,7 +78,7 @@ st.sidebar.markdown(
 
 menu = st.sidebar.radio(
     "Navigation",
-    ["System Dashboard", "Active Incidents", "Logs Explorer", "Settings"]
+    ["System Dashboard", "Active Incidents", "Logs Explorer", "Agent Control", "Settings"]
 )
 
 
@@ -83,33 +95,14 @@ if menu == "System Dashboard":
     st.markdown("<h1>System Monitoring Dashboard</h1>", unsafe_allow_html=True)
     st.write("Real-time operational visibility for platform reliability.")
 
-    # ---------- METRICS ROW ----------
-
     m1, m2, m3, m4 = st.columns(4)
 
-    m1.metric(
-        "Active Incidents",
-        len(incidents)
-    )
-
-    m2.metric(
-        "Total Logs",
-        stats.get("total_logs", 0)
-    )
-
-    m3.metric(
-        "Error Logs",
-        stats.get("error_count", 0)
-    )
-
-    m4.metric(
-        "Warning Logs",
-        stats.get("warning_count", 0)
-    )
+    m1.metric("Active Incidents", len(incidents))
+    m2.metric("Total Logs", stats.get("total_logs", 0))
+    m3.metric("Error Logs", stats.get("error_count", 0))
+    m4.metric("Warning Logs", stats.get("warning_count", 0))
 
     st.write("")
-
-    # ---------- CHARTS ----------
 
     col1, col2 = st.columns(2)
 
@@ -118,8 +111,6 @@ if menu == "System Dashboard":
 
     with col2:
         render_severity_distribution(incidents)
-
-    # ---------- LIVE LOG FEED ----------
 
     st.divider()
     render_log_feed()
@@ -140,7 +131,6 @@ elif menu == "Logs Explorer":
     st.write("Search through system logs in real time.")
 
     search_query = st.text_input("Search Logs (Service or Message)")
-
     logs = get_logs(limit=100)
 
     if logs:
@@ -157,6 +147,13 @@ elif menu == "Logs Explorer":
 
     else:
         st.info("No logs found. Ensure backend is running and data is generated.")
+
+
+# ---------------- AGENT CONTROL ---------------- #
+
+elif menu == "Agent Control":
+
+    render_agent_control()
 
 
 # ---------------- SETTINGS ---------------- #

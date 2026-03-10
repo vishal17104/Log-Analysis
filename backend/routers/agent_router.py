@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from datetime import datetime
 
 from backend.database import get_db
 from backend import crud
@@ -16,33 +17,26 @@ router = APIRouter(
     tags=["Agent Router"]
 )
 
-
 @router.post("/process-incident/{incident_id}")
 def process_incident(
     incident_id: int,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """Agent router that processes an incident and decides next action."""
 
     logger.info(f"Agent Processing incident {incident_id}")
 
-    # Fetch incident
     incident = crud.get_incident(db, incident_id)
+
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    # Get AI reasoning
     reasoning = crud.get_incident_reasoning(db, incident_id)
 
-    # Initialize runbook service
     runbook_service = RunbookService(db)
 
-    # Match runbooks
     matches = runbook_service.match_runbooks_for_incident(incident_id)
 
-    # Decision Logic
     if matches and len(matches) > 0:
-
         best_match = matches[0]
         runbook = best_match["runbook"]
 
@@ -52,8 +46,17 @@ def process_incident(
             runbook.error_type
         )
 
-        commands = runbook_service._extract_commands_from_runbook(full_runbook)
+        # Safety check if runbook exists in DB
+        if not full_runbook:
+            full_runbook_content = "Runbook details missing in database."
+            full_runbook_id = 0
+            full_runbook_title = "Unknown Runbook"
+        else:
+            full_runbook_content = full_runbook.content
+            full_runbook_id = full_runbook.id
+            full_runbook_title = full_runbook.title
 
+        commands = runbook_service._extract_commands_from_runbook(full_runbook) if full_runbook else []
         suggestion = runbook_service.get_suggested_fix(incident_id)
 
         response = {
@@ -62,14 +65,14 @@ def process_incident(
             "confidence": best_match["confidence"],
             "score": best_match["score"],
             "runbook": {
-                "id": full_runbook.id,
-                "service": full_runbook.service,
-                "error_type": full_runbook.error_type,
-                "title": full_runbook.title,
+                "id": full_runbook_id,
+                "service": runbook.service,
+                "error_type": runbook.error_type,
+                "title": full_runbook_title,
                 "content": (
-                    full_runbook.content[:200] + "..."
-                    if full_runbook.content and len(full_runbook.content) > 200
-                    else full_runbook.content
+                    full_runbook_content[:200] + "..."
+                    if full_runbook_content and len(full_runbook_content) > 200
+                    else full_runbook_content
                 )
             },
             "commands": commands,
@@ -85,9 +88,7 @@ def process_incident(
                 "Execute suggested commands"
             ]
         }
-
     else:
-        # No runbook match → generate AI solution
         solution = generate_solution_for_incident(db, incident_id)
 
         response = {
@@ -109,7 +110,6 @@ def process_incident(
         }
 
     logger.info(f"Agent decision for incident {incident_id}: {response['decision']}")
-
     return response
 
 
@@ -119,10 +119,7 @@ def agent_feedback(
     feedback: Dict[str, Any],
     db: Session = Depends(get_db)
 ):
-    """Human feedback on agent decision"""
-
     logger.info(f"Feedback received for incident {incident_id}: {feedback}")
-
     return {
         "status": "feedback recorded",
         "incident_id": incident_id,
@@ -135,8 +132,6 @@ def agent_status(
     incident_id: int,
     db: Session = Depends(get_db)
 ):
-    """Get current agent status for an incident"""
-
     return {
         "incident_id": incident_id,
         "status": "processed",
@@ -150,11 +145,9 @@ def generate_solution_endpoint(
     incident_id: int,
     db: Session = Depends(get_db)
 ):
-    """Generate AI solution for an incident"""
-
     solution = generate_solution_for_incident(db, incident_id)
-
     return solution
+
 
 @router.get("/incidents")
 def list_incidents_for_agent(
@@ -162,35 +155,66 @@ def list_incidents_for_agent(
     limit: int = 50,
     db: Session = Depends(get_db)
 ):
-    """Get incidents for agent dropdown"""
-
     incidents = crud.get_incidents(db, skip=skip, limit=limit)
-
     return [
         {
             "id": i.id,
             "title": i.title,
             "severity": i.severity,
             "status": i.status,
-            "service": getattr(i, 'service', 'unknown'),
+            "service": getattr(i, "service", "unknown"),
             "error_count": i.error_count,
             "detected_at": i.detected_at.isoformat()
         }
         for i in incidents
     ]
 
-@router.get("/status/{incident_id}")
+
+@router.get("/processing-status/{incident_id}")
 def get_incident_status(
     incident_id: int,
     db: Session = Depends(get_db)
 ):
-    
-    """Get current processing status for an incident"""
-
-    #to track if incident was processed by agent
     return {
         "incident_id": incident_id,
         "processed": False,
         "last_action": None,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now().isoformat()
+    }
+
+# ---------------- AGENT RUNTIME CONTROL ---------------- #
+
+agent_running = False
+
+
+@router.post("/start")
+def start_agent():
+    global agent_running
+    agent_running = True
+
+    logger.info("Agent started")
+
+    return {
+        "status": "started",
+        "running": True
+    }
+
+
+@router.post("/stop")
+def stop_agent():
+    global agent_running
+    agent_running = False
+
+    logger.info("Agent stopped")
+
+    return {
+        "status": "stopped",
+        "running": False
+    }
+
+
+@router.get("/status")
+def agent_runtime_status():
+    return {
+        "running": agent_running
     }
