@@ -74,7 +74,8 @@ class IncidentReasoning(Base):
     recommended_actions = Column(JSON, nullable=True)
 
     raw_ai_response = Column(JSON, nullable=True)
-
+    suggested_runbook = Column(String(200), nullable=True)
+    suggested_command = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
@@ -97,3 +98,24 @@ class Runbook(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id"), index=True)
+    
+    # Agent decision info
+    agent_decision = Column(String(50))  # 'use_runbook' or 'escalate_to_human'
+    agent_confidence = Column(String(20))  # 'HIGH', 'MEDIUM', 'LOW'
+    suggested_runbook_id = Column(Integer, ForeignKey("runbooks.id"), nullable=True)
+    
+    # Human feedback
+    human_decision = Column(String(50))  # 'accepted', 'rejected', 'modified'
+    comments = Column(Text, nullable=True)
+    corrected_runbook_id = Column(Integer, ForeignKey("runbooks.id"), nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    processed = Column(Boolean, default=False)  # Whether feedback was used for learning
