@@ -10,13 +10,29 @@ router = APIRouter(
     tags=["Runbooks"]
 )
 
-@router.post("", response_model=RunbookResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=RunbookResponse, status_code=status.HTTP_201_CREATED)
 def create_runbook(payload: RunbookCreate, db: Session = Depends(get_db)):
     """Create a new runbook"""
+
     service = RunbookService(db)
 
+    # Generate runbook filename
     name = f"{payload.service}_{payload.error_type}.md"
 
+    # Prevent duplicate runbooks
+    existing = crud.get_runbook_by_service_type(
+        db,
+        payload.service,
+        payload.error_type
+    )
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Runbook already exists for service '{payload.service}' and error '{payload.error_type}'"
+        )
+
+    # Create runbook
     runbook = service.create_runbook(
         name=name,
         service=payload.service,

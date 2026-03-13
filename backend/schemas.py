@@ -126,23 +126,21 @@ class IncidentSummary(BaseModel):
 
 
 # ---------------- RUNBOOK SCHEMAS ---------------- #
-
 class RunbookBase(BaseModel):
 
     name: str
     title: Optional[str] = None
     content: str
-    tags: Optional[List[str]] = []
+    tags: Optional[List[str]] = Field(default_factory=list)
 
 
 class RunbookCreate(BaseModel):
 
-    name: Optional[str] = None
     service: str
     error_type: str
     title: Optional[str] = None
     content: str
-    tags: Optional[List[str]] = []
+    tags: Optional[List[str]] = Field(default_factory=list)
 
 
 class RunbookUpdate(BaseModel):
