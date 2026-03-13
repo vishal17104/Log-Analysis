@@ -129,6 +129,8 @@ class IncidentSummary(BaseModel):
 
 class RunbookBase(BaseModel):
 
+    service: str
+    error_type: str
     name: str
     title: Optional[str] = None
     content: str

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from backend import models, schemas
 
+
 # ============ HELPER FUNCTIONS ============
 
 def serialize_datetime(obj):
@@ -17,54 +18,71 @@ def serialize_datetime(obj):
     else:
         return obj
 
+
 def get_now():
     """Helper to get consistent UTC time"""
     return datetime.now(timezone.utc)
 
+
 # ============ LOGS ============
 
 def create_log(db: Session, service: str, level: str, message: str):
+
     db_log = models.Log(
         service=service,
         level=level,
         message=message,
-        timestamp=get_now().replace(tzinfo=None) # naive for DB compatibility
+        timestamp=get_now().replace(tzinfo=None)
     )
+
     db.add(db_log)
     db.commit()
     db.refresh(db_log)
+
     return db_log
 
+
 def get_log(db: Session, log_id: int):
+
     return db.query(models.Log).filter(models.Log.id == log_id).first()
 
+
 def get_logs(
-    db: Session, 
-    skip: int = 0, 
+    db: Session,
+    skip: int = 0,
     limit: int = 100,
     service: Optional[str] = None,
     level: Optional[str] = None,
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None
 ):
+
     query = db.query(models.Log)
+
     if service:
         query = query.filter(models.Log.service == service)
+
     if level:
         query = query.filter(models.Log.level == level)
+
     if start_time:
         query = query.filter(models.Log.timestamp >= start_time.replace(tzinfo=None))
+
     if end_time:
         query = query.filter(models.Log.timestamp <= end_time.replace(tzinfo=None))
 
     return query.order_by(models.Log.timestamp.desc()).offset(skip).limit(limit).all()
 
+
 def create_logs_bulk(db: Session, logs: List[schemas.LogCreate]):
+
     db_logs = []
+
     for log in logs:
+
         log_dict = log.dict()
         log_dict = serialize_datetime(log_dict)
-        
+
         db_log = models.Log(
             service=log.service,
             level=log.level,
@@ -77,27 +95,35 @@ def create_logs_bulk(db: Session, logs: List[schemas.LogCreate]):
             trace_id=getattr(log, 'trace_id', None),
             raw_data=log_dict
         )
+
         db.add(db_log)
         db_logs.append(db_log)
 
     db.commit()
+
     return db_logs
 
+
 def search_logs(db: Session, q: str, limit: int = 50):
+
     return db.query(models.Log).filter(
         models.Log.message.ilike(f"%{q}%")
     ).order_by(models.Log.timestamp.desc()).limit(limit).all()
 
+
 def delete_log(db: Session, log_id: int):
+
     log = db.query(models.Log).filter(models.Log.id == log_id).first()
+
     if log:
         db.delete(log)
         db.commit()
         return True
+
     return False
 
 
-# ============ STATS LOGIC (Optimized for Sentinel AI Dashboard) ============
+# ============ STATS LOGIC ============
 
 def get_log_stats(db: Session, minutes: int = 60):
 
@@ -109,16 +135,17 @@ def get_log_stats(db: Session, minutes: int = 60):
     ).all()
 
     total_logs = len(logs)
+
     error_count = sum(1 for log in logs if log.level == "ERROR")
     warning_count = sum(1 for log in logs if log.level == "WARNING")
     info_count = sum(1 for log in logs if log.level == "INFO")
     debug_count = sum(1 for log in logs if log.level == "DEBUG")
 
     service_counts = {}
+
     for log in logs:
         service_counts[log.service] = service_counts.get(log.service, 0) + 1
 
-    # -------- timeline aggregation --------
     timeline_query = (
         db.query(
             func.date_trunc("minute", models.Log.timestamp).label("minute"),
@@ -153,9 +180,11 @@ def get_log_stats(db: Session, minutes: int = 60):
         "timeline": timeline
     }
 
+
 # ============ INCIDENTS ============
 
 def create_incident(db: Session, incident: schemas.IncidentCreate):
+
     db_incident = models.Incident(
         title=incident.title,
         severity=incident.severity,
@@ -165,74 +194,96 @@ def create_incident(db: Session, incident: schemas.IncidentCreate):
         status="open",
         detected_at=get_now().replace(tzinfo=None)
     )
+
     db.add(db_incident)
     db.commit()
     db.refresh(db_incident)
+
     return db_incident
 
+
 def get_incidents(db: Session, skip: int = 0, limit: int = 50, status: str = None, severity: str = None):
+
     query = db.query(models.Incident)
-    if status: query = query.filter(models.Incident.status == status)
-    if severity: query = query.filter(models.Incident.severity == severity)
+
+    if status:
+        query = query.filter(models.Incident.status == status)
+
+    if severity:
+        query = query.filter(models.Incident.severity == severity)
+
     return query.order_by(models.Incident.detected_at.desc()).offset(skip).limit(limit).all()
 
+
 def get_incident(db: Session, incident_id: int):
+
     return db.query(models.Incident).filter(models.Incident.id == incident_id).first()
 
+
 def update_incident_status(db: Session, incident_id: int, status: str):
+
     incident = get_incident(db, incident_id)
+
     if incident:
         incident.status = status
+
         if status == "resolved":
             incident.resolved_at = get_now().replace(tzinfo=None)
+
         db.commit()
         db.refresh(incident)
+
     return incident
 
-def get_incident_summary(db: Session, days: int = 1):
-    """
-    Summary for Sentinel UI metrics. 
-    Includes: Resolutions Today, MTTD calculation, and open count.
-    """
-    now = get_now().replace(tzinfo=None)
-    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Resolutions Today
-    res_today = db.query(models.Incident).filter(
-        and_(models.Incident.status == "resolved", models.Incident.resolved_at >= start_of_today)
-    ).count()
-
-    # Active Incidents
-    active = db.query(models.Incident).filter(models.Incident.status == "open").count()
-
-    # Simple MTTD (Mean Time to Detect) - Average time from window_start to detected_at
-    incidents_with_window = db.query(models.Incident).filter(models.Incident.window_start.isnot(None)).limit(20).all()
-    mttd = "4.2m" # Default fallback
-    if incidents_with_window:
-        diffs = [(i.detected_at - i.window_start).total_seconds() / 60 for i in incidents_with_window]
-        avg = sum(diffs) / len(diffs)
-        mttd = f"{avg:.1f}m"
-
-    return {
-        "active_incidents": active,
-        "resolutions_today": res_today,
-        "mttd": mttd,
-        "availability": "99.98%" # Mock or calculated based on logs
-    }
 
 def get_incident_reasoning(db: Session, incident_id: int):
-    """Get AI reasoning for an incident"""
+
     return db.query(models.IncidentReasoning).filter(
         models.IncidentReasoning.incident_id == incident_id
     ).first()
 
+
 # ============ RUNBOOKS ============
 
 def get_runbook_by_service_type(db: Session, service: str, error_type: str):
+
     return db.query(models.Runbook).filter(
         models.Runbook.service == service,
         models.Runbook.error_type == error_type
     ).first()
 
+
 def get_all_runbooks(db: Session, skip: int = 0, limit: int = 100):
+
     return db.query(models.Runbook).offset(skip).limit(limit).all()
+
+
+# ============ CREATE RUNBOOK ============
+
+def create_runbook(
+    db: Session,
+    service: str,
+    error_type: str,
+    name: str,
+    title: Optional[str],
+    content: str,
+    tags: Optional[List[str]]
+):
+
+    # Ensure tags is always a list
+    clean_tags = tags if isinstance(tags, list) else []
+
+    runbook = models.Runbook(
+        service=service,
+        error_type=error_type,
+        name=name,
+        title=title,
+        content=content,
+        tags=clean_tags
+    )
+
+    db.add(runbook)
+    db.commit()
+    db.refresh(runbook)
+
+    return runbook
