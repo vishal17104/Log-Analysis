@@ -220,6 +220,12 @@ def get_incident_summary(db: Session, days: int = 1):
         "availability": "99.98%" # Mock or calculated based on logs
     }
 
+def get_incident_reasoning(db: Session, incident_id: int):
+    """Get AI reasoning for an incident"""
+    return db.query(models.IncidentReasoning).filter(
+        models.IncidentReasoning.incident_id == incident_id
+    ).first()
+
 # ============ RUNBOOKS ============
 
 def get_runbook_by_service_type(db: Session, service: str, error_type: str):

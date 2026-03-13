@@ -20,6 +20,9 @@ from backend.routers import (
     ws_logs
 )
 
+# Import agent runtime state
+import backend.routers.agent_router as agent_runtime
+
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
 
@@ -48,19 +51,34 @@ app.include_router(notifications.router)
 app.include_router(log_stream.router)
 app.include_router(ws_logs.router)
 
-# Startup background services
+
+# ---------------- STARTUP SERVICES ---------------- #
+
 @app.on_event("startup")
 async def startup_event():
+
+    # Start log ingestion services
     await start_processor()
     await start_broadcaster()
-    logger.info("Log processor and broadcaster started")
 
+    # Start agent runtime
+    agent_runtime.agent_running = True
+
+    logger.info("Log processor and broadcaster started")
+    logger.info("Agent runtime started")
+
+
+# ---------------- ROOT ENDPOINT ---------------- #
 
 @app.get("/")
 def root():
     return {
         "message": "Agentic Log Analyzer API",
         "version": "1.0.0",
+        "status": {
+            "logs": "active",
+            "agent": "running"
+        },
         "endpoints": {
             "logs": "/logs",
             "incidents": "/incidents",
