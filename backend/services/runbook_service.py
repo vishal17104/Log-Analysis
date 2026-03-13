@@ -48,12 +48,13 @@ class RunbookService:
             )
 
             return [{
-                "runbook": runbook,  
+                "runbook": runbook,
                 "score": score,
                 "confidence": self._score_to_confidence(score)
             }]
 
         return self._fallback_keyword_match(service, error_type, keywords)
+
 
     def get_suggested_fix(self, incident_id: int) -> Dict[str, Any]:
         """Get suggested fix for an incident"""
@@ -88,6 +89,7 @@ class RunbookService:
             "message": f"Found matching runbook: {runbook.title}"
         }
 
+
     def _extract_commands_from_runbook(self, runbook: models.Runbook) -> List[str]:
         """Extract shell commands from runbook markdown"""
 
@@ -108,6 +110,7 @@ class RunbookService:
 
         return commands[:3]
 
+
     def _classify_error_type(self, keywords: List[str], severity: str) -> str:
         error_type_map = {
             'timeout': ['timeout', 'timed out', 'deadline', 'slow'],
@@ -125,6 +128,7 @@ class RunbookService:
                 return err_type
 
         return 'unknown'
+
 
     def _calculate_relevance_score(
         self,
@@ -155,6 +159,7 @@ class RunbookService:
 
         return min(score, 100)
 
+
     def _score_to_confidence(self, score: float) -> str:
         if score >= 80:
             return "HIGH"
@@ -183,8 +188,10 @@ class RunbookService:
         matches.sort(key=lambda x: x["score"], reverse=True)
         return matches[:5]
 
+
     def create_runbook(self, service, error_type, content, title=None, tags=None, name=None):
-        return crud.create_runbook_by_service(
+
+        return crud.create_runbook(
             db=self.db,
             service=service,
             error_type=error_type,
