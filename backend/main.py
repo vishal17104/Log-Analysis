@@ -17,7 +17,8 @@ from backend.routers import (
     recommendation_router,
     log_stream,
     notifications,
-    ws_logs
+    ws_logs,
+    analytics
 )
 
 # Import agent runtime state
@@ -50,7 +51,7 @@ app.include_router(notifications.router)
 # Include WebSocket routers
 app.include_router(log_stream.router)
 app.include_router(ws_logs.router)
-
+app.include_router(analytics.router)
 
 # ---------------- STARTUP SERVICES ---------------- #
 
@@ -86,6 +87,7 @@ def root():
             "agent": "/agent",
             "recommendations": "/recommendations",
             "websocket_logs": "/ws/logs",
-            "docs": "/docs"
+            "docs": "/docs",
+            "analytics": "/analytics"
         },
     }
