@@ -236,3 +236,78 @@ def get_runbook_by_service_type(db: Session, service: str, error_type: str):
 
 def get_all_runbooks(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Runbook).offset(skip).limit(limit).all()
+
+def create_runbook_by_service(
+    db: Session,
+    name: str,
+    service: str,
+    error_type: str,
+    title: str,
+    content: str,
+    tags: Optional[List[str]] = None
+):
+    """Create a runbook for a service/error type"""
+
+    runbook = models.Runbook(
+        name=name,
+        service=service,
+        error_type=error_type,
+        title=title,
+        content=content,
+        tags=tags or [],
+        created_at=get_now().replace(tzinfo=None)
+    )
+
+    db.add(runbook)
+    db.commit()
+    db.refresh(runbook)
+
+    return runbook
+
+
+def get_runbook_by_service_type(db: Session, service: str, error_type: str):
+    """Get runbook by service + error type"""
+    return db.query(models.Runbook).filter(
+        models.Runbook.service == service,
+        models.Runbook.error_type == error_type
+    ).first()
+
+
+def get_all_runbooks(db: Session, skip: int = 0, limit: int = 100):
+    """List runbooks"""
+    return db.query(models.Runbook).offset(skip).limit(limit).all()
+
+
+def update_runbook(
+    db: Session,
+    runbook: models.Runbook,
+    title: Optional[str] = None,
+    content: Optional[str] = None,
+    tags: Optional[List[str]] = None
+):
+    """Update runbook fields"""
+
+    if title is not None:
+        runbook.title = title
+
+    if content is not None:
+        runbook.content = content
+
+    if tags is not None:
+        runbook.tags = tags
+
+    runbook.updated_at = get_now().replace(tzinfo=None)
+
+    db.commit()
+    db.refresh(runbook)
+
+    return runbook
+
+
+def delete_runbook(db: Session, runbook: models.Runbook):
+    """Delete runbook"""
+
+    db.delete(runbook)
+    db.commit()
+
+    return True
