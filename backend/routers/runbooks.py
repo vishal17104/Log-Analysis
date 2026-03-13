@@ -10,6 +10,7 @@ router = APIRouter(
     tags=["Runbooks"]
 )
 
+
 @router.post("", response_model=RunbookResponse, status_code=status.HTTP_201_CREATED)
 def create_runbook(payload: RunbookCreate, db: Session = Depends(get_db)):
     """Create a new runbook"""
@@ -29,10 +30,28 @@ def create_runbook(payload: RunbookCreate, db: Session = Depends(get_db)):
     return runbook
 
 
-@router.get("/", response_model=list[RunbookResponse])
+@router.get("/")
 def list_runbooks(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """List all runbooks"""
-    return crud.get_all_runbooks(db, skip=skip, limit=limit)
+
+    runbooks = crud.get_all_runbooks(db, skip=skip, limit=limit)
+
+    results = []
+
+    for rb in runbooks:
+        results.append({
+            "id": getattr(rb, "id", None),
+            "service": getattr(rb, "service", None),
+            "error_type": getattr(rb, "error_type", None),
+            "name": getattr(rb, "name", None),
+            "title": getattr(rb, "title", None),
+            "content": getattr(rb, "content", None),
+            "tags": getattr(rb, "tags", []),
+            "created_at": getattr(rb, "created_at", None),
+            "updated_at": getattr(rb, "updated_at", None)
+        })
+
+    return results
 
 
 @router.post("/match-for-incident/{incident_id}")
@@ -77,13 +96,16 @@ def update_runbook(service: str, error_type: str, payload: RunbookUpdate, db: Se
 
     if payload.title is not None:
         runbook.title = payload.title
+
     if payload.content is not None:
         runbook.content = payload.content
+
     if payload.tags is not None:
         runbook.tags = payload.tags
 
     db.commit()
     db.refresh(runbook)
+
     return runbook
 
 
