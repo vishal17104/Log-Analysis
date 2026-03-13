@@ -6,6 +6,7 @@ from api_client import get_stats, get_incidents, get_logs
 from charts import render_error_frequency, render_severity_distribution
 from incident_view import render_incident_list
 from agent_control import render_agent_control
+from runbook_editor import render_runbook_editor   # ✅ ADDED
 
 
 # ---------------- PAGE CONFIG ---------------- #
@@ -75,7 +76,14 @@ st.sidebar.markdown(
 
 menu = st.sidebar.radio(
     "Navigation",
-    ["System Dashboard", "Active Incidents", "Logs Explorer", "Agent Control", "Settings"]
+    [
+        "System Dashboard",
+        "Active Incidents",
+        "Logs Explorer",
+        "Agent Control",
+        "Runbooks",   # ✅ ADDED
+        "Settings"
+    ]
 )
 
 
@@ -164,6 +172,13 @@ elif menu == "Logs Explorer":
 elif menu == "Agent Control":
 
     render_agent_control()
+
+
+# ---------------- RUNBOOKS ---------------- #
+
+elif menu == "Runbooks":   # ✅ ADDED
+
+    render_runbook_editor()
 
 
 # ---------------- SETTINGS ---------------- #
