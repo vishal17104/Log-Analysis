@@ -16,8 +16,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st_autorefresh(interval=5000, key="sentinel_refresh")
-
 
 # ---------------- DARK THEME CSS ---------------- #
 
@@ -55,7 +53,6 @@ st.markdown("""
         padding-top: 2rem;
     }
 
-    /* FIX: Button styling */
     .stButton>button {
         background-color: #00d1ff;
         color: #0e1117;
@@ -82,15 +79,27 @@ menu = st.sidebar.radio(
 )
 
 
-# ---------------- DATA FETCHING ---------------- #
+# ---------------- CACHED DATA ---------------- #
 
-stats = get_stats()
-incidents = get_incidents()
+@st.cache_data(ttl=5)
+def load_stats():
+    return get_stats()
+
+@st.cache_data(ttl=5)
+def load_incidents():
+    return get_incidents()
+
+
+stats = load_stats()
+incidents = load_incidents()
 
 
 # ---------------- SYSTEM DASHBOARD ---------------- #
 
 if menu == "System Dashboard":
+
+    # Only dashboard refreshes automatically
+    st_autorefresh(interval=5000, key="dashboard_refresh")
 
     st.markdown("<h1>System Monitoring Dashboard</h1>", unsafe_allow_html=True)
     st.write("Real-time operational visibility for platform reliability.")
@@ -113,6 +122,7 @@ if menu == "System Dashboard":
         render_severity_distribution(incidents)
 
     st.divider()
+
     render_log_feed()
 
 
