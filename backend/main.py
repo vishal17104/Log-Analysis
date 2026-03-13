@@ -9,6 +9,7 @@ from backend import models
 from backend.services.log_processor import start_processor
 from backend.services.log_broadcaster import start_broadcaster
 
+# Routers
 from backend.routers import (
     logs,
     incidents,
@@ -21,17 +22,36 @@ from backend.routers import (
     analytics
 )
 
-# Import agent runtime state
+# Agent runtime state
 import backend.routers.agent_router as agent_runtime
 
-# Create database tables
+
+# ---------------- LOGGER ---------------- #
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+
+logger = logging.getLogger("sentinel-api")
+
+
+# ---------------- DATABASE INIT ---------------- #
+
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Agentic Log Analyzer")
 
-logger = logging.getLogger(__name__)
+# ---------------- APP INIT ---------------- #
 
-# Enable CORS
+app = FastAPI(
+    title="Sentinel AI - Agentic Log Analyzer",
+    version="1.0.0",
+    description="AI-powered log monitoring, incident detection and automated remediation platform."
+)
+
+
+# ---------------- CORS ---------------- #
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,41 +60,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include REST API routers
+
+# ---------------- API ROUTERS ---------------- #
+
 app.include_router(logs.router)
 app.include_router(incidents.router)
 app.include_router(runbooks.router)
+
 app.include_router(agent_router.router)
 app.include_router(recommendation_router.router)
 app.include_router(notifications.router)
 
-# Include WebSocket routers
+app.include_router(analytics.router)
+
+# WebSockets
 app.include_router(log_stream.router)
 app.include_router(ws_logs.router)
-app.include_router(analytics.router)
+
 
 # ---------------- STARTUP SERVICES ---------------- #
 
 @app.on_event("startup")
 async def startup_event():
 
-    # Start log ingestion services
-    await start_processor()
-    await start_broadcaster()
+    try:
 
-    # Start agent runtime
-    agent_runtime.agent_running = True
+        await start_processor()
+        logger.info("Log processor started")
 
-    logger.info("Log processor and broadcaster started")
-    logger.info("Agent runtime started")
+        await start_broadcaster()
+        logger.info("Log broadcaster started")
+
+        agent_runtime.agent_running = True
+        logger.info("Agent runtime started")
+
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
 
 
-# ---------------- ROOT ENDPOINT ---------------- #
+# ---------------- HEALTH CHECK ---------------- #
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
+
+# ---------------- ROOT ---------------- #
 
 @app.get("/")
 def root():
+
     return {
-        "message": "Agentic Log Analyzer API",
+        "service": "Sentinel AI - Agentic Log Analyzer",
         "version": "1.0.0",
         "status": {
             "logs": "active",
@@ -86,8 +123,8 @@ def root():
             "runbooks": "/runbooks",
             "agent": "/agent",
             "recommendations": "/recommendations",
+            "analytics": "/logs/stats",
             "websocket_logs": "/ws/logs",
-            "docs": "/docs",
-            "analytics": "/analytics"
-        },
+            "docs": "/docs"
+        }
     }

@@ -6,7 +6,8 @@ from api_client import get_stats, get_incidents, get_logs
 from charts import render_error_frequency, render_severity_distribution
 from incident_view import render_incident_list
 from agent_control import render_agent_control
-from runbook_editor import render_runbook_editor   # ✅ ADDED
+from runbook_editor import render_runbook_editor
+from analytics import render_analytics   # ✅ ADDED
 
 
 # ---------------- PAGE CONFIG ---------------- #
@@ -81,7 +82,8 @@ menu = st.sidebar.radio(
         "Active Incidents",
         "Logs Explorer",
         "Agent Control",
-        "Runbooks",   # ✅ ADDED
+        "Runbooks",
+        "Analytics",   # ✅ ADDED
         "Settings"
     ]
 )
@@ -106,7 +108,6 @@ incidents = load_incidents()
 
 if menu == "System Dashboard":
 
-    # Only dashboard refreshes automatically
     st_autorefresh(interval=5000, key="dashboard_refresh")
 
     st.markdown("<h1>System Monitoring Dashboard</h1>", unsafe_allow_html=True)
@@ -176,9 +177,16 @@ elif menu == "Agent Control":
 
 # ---------------- RUNBOOKS ---------------- #
 
-elif menu == "Runbooks":   # ✅ ADDED
+elif menu == "Runbooks":
 
     render_runbook_editor()
+
+
+# ---------------- ANALYTICS ---------------- #
+
+elif menu == "Analytics":   # ✅ ADDED
+
+    render_analytics()
 
 
 # ---------------- SETTINGS ---------------- #
