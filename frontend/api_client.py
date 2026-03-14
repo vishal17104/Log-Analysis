@@ -1,6 +1,7 @@
+import os
 import requests
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 
 # --- YOUR EXISTING CODE (UNTOUCHED) ---
 
