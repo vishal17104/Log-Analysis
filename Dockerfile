@@ -1,6 +1,5 @@
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
 # Install system dependencies (optional but safe)
@@ -9,14 +8,16 @@ RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
 # Copy dependency file
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install with increased timeout and retry
+RUN pip install --no-cache-dir --default-timeout=100 --retries=5 \
+    -i https://pypi.org/simple \
+    -r requirements.txt
 
-# Copy backend code
+# Copy all code folders
 COPY backend ./backend
+COPY scripts ./scripts
+# COPY tests ./tests  # Uncomment if needed
 
-# Expose FastAPI port
 EXPOSE 8000
 
-# Start FastAPI using uvicorn
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
