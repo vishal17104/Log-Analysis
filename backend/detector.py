@@ -11,13 +11,16 @@ from backend.services.incident_service import create_incident_from_spike, get_op
 from backend.services.pattern_matcher import get_pattern_matcher
 
 # ---------------- CONFIG ---------------- #
-ERROR_THRESHOLD = 5              # Increased slightly for better testing
-TIME_WINDOW = 5                  # Look back 5 minutes
-CONSECUTIVE_TIME = 2             # Minutes sustained
+from backend.config import (
+    ERROR_THRESHOLD,
+    TIME_WINDOW,
+    CONSECUTIVE_TIME,
+    SEVERITY_THRESHOLDS,
+    LOG_LEVEL
+)
 
-SEVERITY_THRESHOLDS = {"CRITICAL": 50, "HIGH": 20, "MEDIUM": 10, "LOW": 5}
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=getattr(logging, LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
 # ---------------- DETECTION LOGIC ---------------- #

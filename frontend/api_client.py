@@ -1,9 +1,8 @@
-import os
 import requests
+from config import API_URL
 
-BASE_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 
-# --- YOUR EXISTING CODE (UNTOUCHED) ---
+BASE_URL = API_URL
 
 def get_incidents():
     try:
@@ -29,12 +28,10 @@ def get_recommendation(incident_id):
     except Exception:
         return {}
 
-# --- ADDED FOR DAY 19 UI SUPPORT ---
 
 def get_stats():
     """Fetches log statistics (error counts, service distribution) for the metrics row"""
     try:
-        # This calls the /logs/stats endpoint we created in your logs.py router
         r = requests.get(f"{BASE_URL}/logs/stats?minutes=1440")
         r.raise_for_status()
         return r.json()

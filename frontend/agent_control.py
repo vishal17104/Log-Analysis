@@ -1,8 +1,6 @@
 import streamlit as st
 import requests
-import os
-
-API_URL = os.getenv("BACKEND_URL", "http://backend:8000")
+from config import API_URL
 
 
 # ---------------- INCIDENT FETCH ---------------- #

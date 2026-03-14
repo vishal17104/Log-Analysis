@@ -1,3 +1,4 @@
+# frontend/streamlit_app.py
 import streamlit as st
 import pandas as pd
 from log_feed import render_log_feed
@@ -7,63 +8,81 @@ from charts import render_error_frequency, render_severity_distribution
 from incident_view import render_incident_list
 from agent_control import render_agent_control
 from runbook_editor import render_runbook_editor
-from analytics import render_analytics   # ✅ ADDED
+from analytics import render_analytics 
 
+# ============ IMPORT FROM CONFIG ============
+from config import (
+    APP_TITLE,
+    APP_ICON,
+    PAGE_TITLE,
+    LAYOUT,
+    AUTO_REFRESH_INTERVAL,
+    ENABLE_AUTO_REFRESH,
+    PRIMARY_COLOR,
+    BACKGROUND_COLOR,
+    CARD_COLOR,
+    THEME
+)
 
 # ---------------- PAGE CONFIG ---------------- #
 
 st.set_page_config(
-    page_title="Sentinel AI Monitoring",
-    layout="wide",
+    page_title=PAGE_TITLE,
+    page_icon=APP_ICON,
+    layout=LAYOUT,
     initial_sidebar_state="expanded"
 )
 
+# ---------------- DARK THEME CSS WITH CONFIG COLORS ---------------- #
 
-# ---------------- DARK THEME CSS ---------------- #
-
-st.markdown("""
+st.markdown(f"""
 <style>
-    .stApp { background-color: #0e1117; }
+    .stApp {{ background-color: {BACKGROUND_COLOR}; }}
 
-    h1, h2, h3, h4, p {
+    h1, h2, h3, h4, p {{
         color: white !important;
-    }
+    }}
 
-    section[data-testid="stSidebar"] {
-        background-color: #0e1117 !important;
+    section[data-testid="stSidebar"] {{
+        background-color: {BACKGROUND_COLOR} !important;
         border-right: 1px solid #1e2130;
-    }
+    }}
 
-    div[data-testid="stMetric"] {
-        background-color: #1e2130;
+    div[data-testid="stMetric"] {{
+        background-color: {CARD_COLOR};
         border: 1px solid #2d313e;
         border-radius: 12px;
         padding: 20px !important;
-    }
+    }}
 
-    div[data-testid="stMetricLabel"] {
+    div[data-testid="stMetricLabel"] {{
         color: #808495 !important;
         font-size: 13px !important;
-    }
+    }}
 
-    div[data-testid="stMetricValue"] {
+    div[data-testid="stMetricValue"] {{
         color: white !important;
         font-size: 30px !important;
-    }
+    }}
 
-    .block-container {
+    .block-container {{
         padding-top: 2rem;
-    }
+    }}
 
-    .stButton>button {
-        background-color: #00d1ff;
+    .stButton>button {{
+        background-color: {PRIMARY_COLOR};
         color: #0e1117;
         font-weight: bold;
         border-radius: 8px;
         border: none;
         padding: 10px 24px;
-    }
+    }}
 
+    /* Optional: Add theme-based adjustments */
+    {'' if THEME == 'dark' else '''
+    .stApp { background-color: #ffffff; }
+    h1, h2, h3, h4, p { color: #000000 !important; }
+    '''}
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,7 +90,7 @@ st.markdown("""
 # ---------------- SIDEBAR ---------------- #
 
 st.sidebar.markdown(
-    "<h2 style='color:#00d1ff;'>🛡️ Sentinel AI</h2>",
+    f"<h2 style='color:{PRIMARY_COLOR};'>🛡️ {APP_TITLE}</h2>",
     unsafe_allow_html=True
 )
 
@@ -83,7 +102,7 @@ menu = st.sidebar.radio(
         "Logs Explorer",
         "Agent Control",
         "Runbooks",
-        "Analytics",   # ✅ ADDED
+        "Analytics",  
         "Settings"
     ]
 )
@@ -108,7 +127,8 @@ incidents = load_incidents()
 
 if menu == "System Dashboard":
 
-    st_autorefresh(interval=5000, key="dashboard_refresh")
+    if ENABLE_AUTO_REFRESH:
+        st_autorefresh(interval=AUTO_REFRESH_INTERVAL, key="dashboard_refresh")
 
     st.markdown("<h1>System Monitoring Dashboard</h1>", unsafe_allow_html=True)
     st.write("Real-time operational visibility for platform reliability.")
@@ -184,7 +204,7 @@ elif menu == "Runbooks":
 
 # ---------------- ANALYTICS ---------------- #
 
-elif menu == "Analytics":   # ✅ ADDED
+elif menu == "Analytics":
 
     render_analytics()
 
@@ -197,9 +217,16 @@ elif menu == "Settings":
     st.write("Configuration and integrations.")
 
     with st.expander("API Configuration"):
-        st.write("Backend URL: `http://localhost:8000` (Default)")
+        # Use config values here too
+        from config import API_URL
+        st.write(f"Backend URL: `{API_URL}`")
         st.write("Status: 🟢 Connected" if stats else "Status: 🔴 Disconnected")
 
+    with st.expander("UI Configuration"):
+        st.write(f"Theme: `{THEME}`")
+        st.write(f"Primary Color: `{PRIMARY_COLOR}`")
+        st.write(f"Auto-refresh: `{ENABLE_AUTO_REFRESH}` ({AUTO_REFRESH_INTERVAL}ms)")
+
     with st.expander("AI Integration"):
-        st.write("Model: `Gemini 1.5 Flash`")
+        st.write("Model: `Gemini 2.5 Flash`")
         st.write("Purpose: Automated Triage & Recommendation")

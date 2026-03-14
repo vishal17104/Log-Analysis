@@ -1,16 +1,16 @@
 from google import genai
-from google.genai import types # Required for JSON mode configuration
-import os
+from google.genai import types 
 import json
 import logging
 from typing import Dict, Any, List
+from backend.config import GEMINI_API_KEY, LOG_LEVEL
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=getattr(logging, LOG_LEVEL))
 
-# Use gemini-1.5-flash for faster, cheaper processing for logs
 MODEL_NAME = "models/gemini-2.5-flash"
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 def analyze_incident(
     logs: List[Dict[str, Any]],
