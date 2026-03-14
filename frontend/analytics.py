@@ -2,8 +2,9 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 import requests
+import os
 
-API_URL = "http://localhost:8000"
+API_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 
 
 def fetch_stats():
