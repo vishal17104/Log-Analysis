@@ -21,6 +21,7 @@ from backend.routers import (
     ws_logs,
     analytics
 )
+from backend.logging_config import setup_logging
 
 # Agent runtime state
 import backend.routers.agent_router as agent_runtime
@@ -32,7 +33,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
-
+setup_logging()
 logger = logging.getLogger("sentinel-api")
 
 

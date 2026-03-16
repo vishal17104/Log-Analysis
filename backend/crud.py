@@ -3,6 +3,9 @@ from sqlalchemy import func, and_
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from backend import models, schemas
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ============ HELPER FUNCTIONS ============

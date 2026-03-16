@@ -87,17 +87,17 @@ def detect_and_create_incidents(db: Session):
         spike["logs"] = fetch_recent_error_logs(db, service, spike["window_start"], spike["window_end"])
         
         incident = create_incident_from_spike(db, spike)
-        logger.info(f"🚨 Created incident #{incident.id} for {service}")
+        logger.info(f"Created incident #{incident.id} for {service}")
 
     # 2️⃣ PATTERN-BASED DETECTION
     try:
         matcher = get_pattern_matcher(db)
         pattern_matches = matcher.match_recent_errors(minutes=TIME_WINDOW)
         if pattern_matches:
-            logger.info(f"📊 Found {len(pattern_matches)} pattern matches")
+            logger.info(f"Found {len(pattern_matches)} pattern matches")
             # Log summary logic remains here...
     except Exception as e:
-        logger.error(f"❌ Pattern matching failed: {e}")
+        logger.error(f"Pattern matching failed: {e}")
 
 if __name__ == "__main__":
     while True:
