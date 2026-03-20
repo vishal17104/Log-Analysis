@@ -1,14 +1,13 @@
-# frontend/Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy only frontend requirements
-COPY frontend/requirements.txt .
+# Copy requirements (no frontend/ prefix!)
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy frontend code
-COPY frontend/ .
+# Copy all frontend code (no frontend/ prefix!)
+COPY . .
 
 EXPOSE 8501
 
