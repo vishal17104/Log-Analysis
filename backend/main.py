@@ -19,7 +19,8 @@ from backend.routers import (
     log_stream,
     notifications,
     ws_logs,
-    analytics
+    analytics,
+    generator
 )
 from backend.logging_config import setup_logging
 
@@ -77,6 +78,7 @@ app.include_router(analytics.router)
 # WebSockets
 app.include_router(log_stream.router)
 app.include_router(ws_logs.router)
+app.include_router(generator.router)
 
 
 # ---------------- STARTUP SERVICES ---------------- #

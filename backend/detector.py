@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 import time
 import logging
-
+from backend.services.notifier import notifier
 from backend import models
 from backend.database import SessionLocal
 from backend.services.incident_service import create_incident_from_spike, get_open_incident_for_service
@@ -88,6 +88,12 @@ def detect_and_create_incidents(db: Session):
         
         incident = create_incident_from_spike(db, spike)
         logger.info(f"Created incident #{incident.id} for {service}")
+
+        try:
+            notifier.send_all(incident)
+            logger.info(f"Notifications sent for incident #{incident.id}")
+        except Exception as e:
+            logger.error(f"Failed to send notifications: {e}")
 
     # 2️⃣ PATTERN-BASED DETECTION
     try:

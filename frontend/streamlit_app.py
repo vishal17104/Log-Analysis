@@ -1,9 +1,17 @@
 # frontend/streamlit_app.py
 import streamlit as st
 import pandas as pd
+import requests
 from log_feed import render_log_feed
 from streamlit_autorefresh import st_autorefresh
-from api_client import get_stats, get_incidents, get_logs
+from api_client import (
+    get_stats, 
+    get_incidents, 
+    get_logs,
+    generate_error_burst,
+    generate_normal_traffic,
+    generate_custom_batch
+)
 from charts import render_error_frequency, render_severity_distribution
 from incident_view import render_incident_list
 from agent_control import render_agent_control
@@ -21,7 +29,8 @@ from config import (
     PRIMARY_COLOR,
     BACKGROUND_COLOR,
     CARD_COLOR,
-    THEME
+    THEME,
+    API_URL
 )
 
 # ---------------- PAGE CONFIG ---------------- #
@@ -102,7 +111,8 @@ menu = st.sidebar.radio(
         "Logs Explorer",
         "Agent Control",
         "Runbooks",
-        "Analytics",  
+        "Analytics",
+        "Test Data",   # ← NEW
         "Settings"
     ]
 )
@@ -133,6 +143,7 @@ if menu == "System Dashboard":
     st.markdown("<h1>System Monitoring Dashboard</h1>", unsafe_allow_html=True)
     st.write("Real-time operational visibility for platform reliability.")
 
+    # Metrics row
     m1, m2, m3, m4 = st.columns(4)
 
     m1.metric("Active Incidents", len(incidents))
@@ -142,6 +153,7 @@ if menu == "System Dashboard":
 
     st.write("")
 
+    # Charts row
     col1, col2 = st.columns(2)
 
     with col1:
@@ -155,7 +167,7 @@ if menu == "System Dashboard":
     render_log_feed()
 
 
-# ---------------- INCIDENT PAGE ---------------- #
+# ---------------- ACTIVE INCIDENTS PAGE ---------------- #
 
 elif menu == "Active Incidents":
 
@@ -209,6 +221,82 @@ elif menu == "Analytics":
     render_analytics()
 
 
+# ---------------- TEST DATA PAGE ---------------- #
+
+elif menu == "Test Data":
+
+    st.markdown("# 🧪 Test Data Generator")
+    st.write("Generate mock logs for testing and demonstrations")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 🔥 Quick Actions")
+        
+        if st.button("🔥 Error Burst (100 logs, 80% errors)", use_container_width=True):
+            with st.spinner("Generating error burst..."):
+                result = generate_error_burst()
+                if result:
+                    st.success(f"✅ {result.get('message', 'Logs generated!')}")
+                    st.info("👉 Check 'Active Incidents' page to see incidents created")
+                    st.rerun()
+                else:
+                    st.error("Failed to generate error burst")
+    
+    with col2:
+        st.markdown("### 📊 Normal Traffic")
+        
+        if st.button("📊 Normal Traffic (50 logs)", use_container_width=True):
+            with st.spinner("Generating normal traffic..."):
+                result = generate_normal_traffic()
+                if result:
+                    st.success(f"✅ {result.get('message', 'Logs generated!')}")
+                    st.rerun()
+                else:
+                    st.error("Failed to generate normal traffic")
+    
+    st.divider()
+    
+    st.markdown("### 🎲 Custom Batch")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        batch_size = st.number_input("Batch Size", min_value=10, max_value=500, value=100)
+    
+    with col2:
+        error_burst = st.checkbox("Error Burst (80% errors)", value=True)
+    
+    with col3:
+        service_filter = st.selectbox(
+            "Service (optional)", 
+            ["All", "payment", "auth", "api", "worker", "frontend", "database"]
+        )
+    
+    if st.button("🚀 Generate Custom Batch", use_container_width=True):
+        service = None if service_filter == "All" else service_filter
+        with st.spinner(f"Generating {batch_size} logs..."):
+            result = generate_custom_batch(batch_size=batch_size, error_burst=error_burst, service=service)
+            if result:
+                st.success(f"✅ {result.get('message', 'Logs generated!')}")
+                st.json(result)
+                st.rerun()
+            else:
+                st.error("Failed to generate custom batch")
+    
+    st.divider()
+    
+    # Display current stats
+    st.markdown("### 📊 Current System State")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Logs", stats.get("total_logs", 0))
+    with col2:
+        st.metric("Error Logs", stats.get("error_count", 0))
+    with col3:
+        st.metric("Active Incidents", len(incidents))
+
+
 # ---------------- SETTINGS ---------------- #
 
 elif menu == "Settings":
@@ -217,8 +305,6 @@ elif menu == "Settings":
     st.write("Configuration and integrations.")
 
     with st.expander("API Configuration"):
-        # Use config values here too
-        from config import API_URL
         st.write(f"Backend URL: `{API_URL}`")
         st.write("Status: 🟢 Connected" if stats else "Status: 🔴 Disconnected")
 
@@ -230,3 +316,22 @@ elif menu == "Settings":
     with st.expander("AI Integration"):
         st.write("Model: `Gemini 2.5 Flash`")
         st.write("Purpose: Automated Triage & Recommendation")
+    
+    with st.expander("🔄 Log Generator (Quick Access)"):
+        st.write("Generate test logs directly from settings")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔥 Error Burst", use_container_width=True):
+                with st.spinner("Generating..."):
+                    result = generate_error_burst()
+                    if result:
+                        st.success("✅ Logs generated!")
+                        st.rerun()
+        with col2:
+            if st.button("📊 Normal Traffic", use_container_width=True):
+                with st.spinner("Generating..."):
+                    result = generate_normal_traffic()
+                    if result:
+                        st.success("✅ Logs generated!")
+                        st.rerun()
